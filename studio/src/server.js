@@ -65,6 +65,9 @@ export function createApp(cfg = getConfig(), { provider: override = null, log = 
 	const jobs = new Jobs({ store, provider, cfg, log, providerFor, onWatched: (id) => writeRunReel(id) });
 	const app = express();
 
+	// Health check for load balancers and Docker: open, and says nothing about the setup.
+	app.get('/healthz', (req, res) => res.json({ ok: true }));
+
 	// Optional password (HTTP Basic, any user name). /media stays open because Instagram downloads
 	// the videos from there.
 	if (cfg.password) {
@@ -489,7 +492,14 @@ export function createApp(cfg = getConfig(), { provider: override = null, log = 
 
 const isMain = process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(new URL(import.meta.url).pathname);
 if (isMain) {
-	const ctx = createApp();
+	const cfg0 = getConfig();
+	const local = ['127.0.0.1', 'localhost', '::1'].includes(cfg0.host);
+	// On a server the studio holds your API keys: refuse to open it to the network without a password.
+	if (!local && !cfg0.password && process.env.ALLOW_NO_PASSWORD !== '1') {
+		console.error(`HOST=${cfg0.host} makes the studio reachable from other machines, but STUDIO_PASSWORD is not set.\nSet STUDIO_PASSWORD in .env (or ALLOW_NO_PASSWORD=1 on a private network) and start again.`);
+		process.exit(1);
+	}
+	const ctx = createApp(cfg0);
 	ctx.jobs.resume();
 	ctx.jobs.startScheduler();
 	ctx.app.listen(ctx.cfg.port, ctx.cfg.host, () => {
@@ -497,7 +507,7 @@ if (isMain) {
 		const mode = ctx.provider.mode === 'live'
 			? `scripts ${m.text}, analysis ${m.vision}, images ${m.image}, voice ${m.voice}`
 			: 'MOCK mode (no API key): placeholder images, silent voice. Add a key in Settings or .env';
-		if (ctx.cfg.host !== '127.0.0.1' && !ctx.cfg.password) console.warn(`Listening on ${ctx.cfg.host} without STUDIO_PASSWORD: anyone on your network can use this studio.`);
-		downloaderVersion(ctx.cfg.watch).then((v) => console.log(`Ootto Studio on http://localhost:${ctx.cfg.port}\nContent: ${mode}\nInstagram: ${instagramReady(ctx.cfg) ? 'connected' : 'not connected (reels can still be downloaded)'}\nReel links: ${v ? `yt-dlp ${v}` : 'yt-dlp not found (install it to watch links; uploads still work)'}`));
+		if (!local && !ctx.cfg.password) console.warn(`Listening on ${ctx.cfg.host} without STUDIO_PASSWORD: anyone who can reach it can use this studio.`);
+		downloaderVersion(ctx.cfg.watch).then((v) => console.log(`Ootto Studio on http://${local ? 'localhost' : ctx.cfg.host}:${ctx.cfg.port}${ctx.cfg.password ? ' (password protected)' : ''}\nContent: ${mode}\nInstagram: ${instagramReady(ctx.cfg) ? 'connected' : 'not connected (reels can still be downloaded)'}\nReel links: ${v ? `yt-dlp ${v}` : 'yt-dlp not found (install it to watch links; uploads still work)'}`));
 	});
 }

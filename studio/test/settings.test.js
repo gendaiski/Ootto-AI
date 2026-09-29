@@ -112,6 +112,7 @@ test('remote requests cannot change settings unless a password is set; the passw
 		const v = (await p.call('GET', '/api/settings', null, { ...auth, 'X-Forwarded-For': '203.0.113.9' })).body;
 		assert.equal(v.canEdit, true, 'with a password, remote edits are allowed after sign-in');
 		assert.notEqual((await p.call('GET', '/media/nothing.mp4')).status, 401, 'media stays reachable for Instagram');
+		assert.equal((await p.call('GET', '/healthz')).status, 200, 'health check stays open for load balancers');
 	} finally { await p.close(); fs.rmSync(dir2, { recursive: true, force: true }); }
 });
 

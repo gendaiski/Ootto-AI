@@ -131,6 +131,10 @@ Posting follows Instagram's own sequence. The studio creates a `REELS` container
 - **Cut detection:** hard cuts are found reliably. Very similar shots, slow dissolves and cuts between near-identical frames can be missed; `WATCH_SCENE_THRESHOLD` adjusts the sensitivity. The vision model still sees the frames when it sets the beats.
 - **Remakes use still images:** a remake reproduces the structure and timing with AI stills and motion, not filmed footage.
 
+## Deploy to a server
+
+Docker is the quickest route: `cp .env.example .env`, set `STUDIO_PASSWORD`, then `docker compose up -d --build`. The image includes ffmpeg and yt-dlp. [docs/DEPLOY.md](docs/DEPLOY.md) covers Docker, plain Node with systemd, HTTPS with Caddy, the server settings, updates and backups.
+
 ## For developers
 
 See [docs/DEVELOPER.md](docs/DEVELOPER.md) for the architecture, data model, full API reference, how a request flows through the pipeline, and how to add a provider.

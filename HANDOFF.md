@@ -10,7 +10,12 @@ Status: **complete and ready for review.** Everything below is on branch `claude
 | Business model notes | `BUSINESS-MODEL.md` | Done. Built from public search snippets and marked as such. |
 | Ootto Studio (the working app) | `studio/` | Done: plan, render, review, post; watch & remake; patterns; Settings with OpenAI and Claude keys; usage and caps. |
 | Studio developer guide | `studio/docs/DEVELOPER.md` | Architecture, request flows, data model, API reference, configuration, security, tests. |
+| Server deployment | `studio/Dockerfile`, `studio/docker-compose.yml`, `studio/docs/DEPLOY.md` | Done. The image builds and runs: system check passes, the password is enforced, a full upload run completes, data survives a restart, and the health check reports healthy. |
 | Static demo build | `studio/scripts/build-demo.mjs` → `studio/demo-dist/` (git-ignored) | Done. Every flow works in the browser as a labelled simulation built from sample renders; no AI is called and no keys are accepted. |
+
+## Ship it to a server
+
+`cd studio && cp .env.example .env`, set `STUDIO_PASSWORD`, then `docker compose up -d --build`. Put HTTPS in front (Caddy, two lines) and open the site. The full guide is `studio/docs/DEPLOY.md`.
 
 ## Run and verify (for a reviewer or another coding agent)
 
