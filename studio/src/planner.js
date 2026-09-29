@@ -1,5 +1,7 @@
 // Turns a business brief into a week of reel plans (and rewrites one reel from feedback).
+// Optional: patterns learned from watched reels steer the week.
 export const FORMATS = ['tips', 'myth_vs_fact', 'behind_the_scenes', 'customer_story', 'how_to', 'offer', 'faq'];
+const ALL_FORMATS = [...FORMATS, 'remake'];
 
 const SCENE = {
 	type: 'object',
@@ -47,7 +49,7 @@ Rules:
 - Vary the formats across the week and end each reel with one clear call to action.
 - Write every field in the requested language.`;
 
-function briefBlock(brand) {
+export function briefBlock(brand) {
 	return [
 		`Business: ${brand.name || 'unnamed'}`,
 		brand.website && `Website: ${brand.website}`,
@@ -60,55 +62,81 @@ function briefBlock(brand) {
 	].filter(Boolean).join('\n');
 }
 
-export async function planWeek(provider, brand, count) {
+// Patterns found across watched reels, as instructions for the planner.
+export function profileBlock(p) {
+	return [
+		`Use these patterns, learned from reels that perform well in this niche${p.measured?.reels ? ` (${p.measured.reels} reels studied)` : ''}:`,
+		p.summary,
+		p.hook_patterns?.length && `Hook shapes that work (fill them for this business, do not copy the examples):\n${p.hook_patterns.map((h) => `- ${h.type}: ${h.template}`).join('\n')}`,
+		p.structure?.length && `Beat structure: ${p.structure.join(' -> ')}`,
+		p.length_seconds && `Target length: about ${Math.round(p.length_seconds)} seconds, beats of about ${p.beat_seconds} seconds.`,
+		p.cta_patterns?.length && `Calls to action that work: ${p.cta_patterns.join('; ')}`,
+		p.do?.length && `Do: ${p.do.join('; ')}`,
+		p.avoid?.length && `Avoid: ${p.avoid.join('; ')}`,
+	].filter(Boolean).join('\n');
+}
+
+export async function planWeek(provider, brand, count, { profile = null } = {}) {
 	const out = await provider.json({
 		system: SYSTEM,
-		user: `${briefBlock(brand)}\n\nWrite ${count} different reels for the coming week, in posting order.`,
+		user: `${briefBlock(brand)}\n\n${profile ? `${profileBlock(profile)}\n\n` : ''}Write ${count} different reels for the coming week, in posting order.`,
 		schemaName: 'reel_week',
 		schema: WEEK_SCHEMA,
-		mock: () => mockWeek(brand, count),
+		mock: () => mockWeek(brand, count, profile),
 	});
-	const reels = (out.reels || []).slice(0, count).map(normalizeReel);
+	const layout = profile?.text_position && profile.text_position !== 'none' ? { text_position: profile.text_position } : undefined;
+	const reels = (out.reels || []).slice(0, count).map((r) => normalizeReel(r, { layout }));
 	if (!reels.length) throw new Error('The planner returned no reels.');
 	return reels;
 }
 
 export async function reviseReel(provider, brand, plan, feedback) {
+	const exact = plan.timing === 'exact';
+	const keep = exact ? `\nKeep exactly ${plan.scenes.length} scenes with the same seconds per scene unless the feedback asks to change the timing.` : '';
 	const out = await provider.json({
 		system: SYSTEM,
-		user: `${briefBlock(brand)}\n\nHere is a reel the owner reviewed:\n${JSON.stringify(plan, null, 2)}\n\nTheir feedback: "${feedback}"\n\nRewrite this reel to address the feedback. Keep what they did not complain about.`,
+		user: `${briefBlock(brand)}\n\nHere is a reel the owner reviewed:\n${JSON.stringify(plan, null, 2)}\n\nTheir feedback: "${feedback}"\n\nRewrite this reel to address the feedback. Keep what they did not complain about.${keep}`,
 		schemaName: 'reel',
 		schema: REEL_SCHEMA,
 		mock: () => mockRevision(plan, feedback),
 	});
-	return normalizeReel(out);
+	const next = normalizeReel(out, { timing: plan.timing, layout: plan.layout });
+	if (exact && next.scenes.length === plan.scenes.length) next.scenes.forEach((sc, i) => { sc.seconds = plan.scenes[i].seconds; });
+	return next;
 }
 
 const clampWords = (s, n) => String(s || '').trim().split(/\s+/).slice(0, n).join(' ');
 
-export function normalizeReel(r) {
-	let scenes = (r.scenes || []).slice(0, 6).map((s) => ({
-		seconds: Math.min(6, Math.max(2, Number(s.seconds) || 3)),
+// timing 'exact' (remakes): keep each scene's length as given (0.5-20 s), allow up to 12 scenes
+// and longer lines. layout.text_position places the headline (top, middle or bottom).
+export function normalizeReel(r, { timing, layout } = {}) {
+	const exact = timing === 'exact';
+	let scenes = (r.scenes || []).slice(0, exact ? 12 : 6).map((s) => ({
+		seconds: exact ? Math.round(Math.min(20, Math.max(0.5, Number(s.seconds) || 3)) * 100) / 100 : Math.min(6, Math.max(2, Number(s.seconds) || 3)),
 		visual: String(s.visual || '').trim() || 'A warm, natural-light photo of the business at work',
-		on_screen_text: clampWords(s.on_screen_text, 8),
-		voiceover: clampWords(s.voiceover, 30),
+		on_screen_text: clampWords(s.on_screen_text, exact ? 16 : 8),
+		voiceover: clampWords(s.voiceover, exact ? 60 : 30),
 	}));
 	if (scenes.length < 1) throw new Error('A reel came back without scenes.');
 	const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(r.best_time) ? r.best_time : '18:00';
+	const pos = layout?.text_position;
 	return {
 		title: clampWords(r.title, 8) || 'Untitled reel',
-		format: FORMATS.includes(r.format) ? r.format : 'tips',
+		format: ALL_FORMATS.includes(r.format) ? r.format : 'tips',
 		hook: String(r.hook || scenes[0].on_screen_text).trim(),
 		scenes,
 		caption: String(r.caption || '').trim(),
 		hashtags: [...new Set((r.hashtags || []).map((h) => String(h).replace(/^#/, '').replace(/\s+/g, '')).filter(Boolean))].slice(0, 12),
 		cta: String(r.cta || '').trim(),
 		best_time: time,
+		...(exact && { timing: 'exact' }),
+		...(['top', 'middle', 'bottom'].includes(pos) && { layout: { text_position: pos } }),
 	};
 }
 
 // ---------- mock content (no API key) ----------
-function mockWeek(brand, count) {
+function mockWeek(brand, count, profile) {
+	const hookFrom = (i, fallback) => profile?.hook_patterns?.[i % (profile.hook_patterns.length || 1)]?.template || fallback;
 	const name = brand.name || 'your business';
 	const offer = brand.offer || 'Send us a message';
 	const topics = [
@@ -122,7 +150,9 @@ function mockWeek(brand, count) {
 	];
 	return {
 		reels: Array.from({ length: count }, (_, i) => {
-			const [format, title, hook] = topics[i % topics.length];
+			const [format, baseTitle, baseHook] = topics[i % topics.length];
+			const hook = hookFrom(i, baseHook);
+			const title = profile ? clampWords(hook, 6) : baseTitle;
 			return {
 				title, format, hook,
 				scenes: [

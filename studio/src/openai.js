@@ -1,5 +1,8 @@
-// Minimal OpenAI REST client: structured JSON chat, image generation, text-to-speech.
-// Uses fetch directly so there is no SDK version to keep in step; the base URL is configurable.
+// Minimal OpenAI REST client: structured JSON chat (text or images), image generation,
+// text-to-speech and speech-to-text. Uses fetch directly so there is no SDK version to keep in
+// step; the base URL is configurable.
+import fs from 'node:fs';
+import path from 'node:path';
 
 export class OpenAIError extends Error {
 	constructor(message, status, body) {
@@ -10,16 +13,19 @@ export class OpenAIError extends Error {
 }
 
 export class OpenAIClient {
-	constructor({ apiKey, baseUrl, textModel, imageModel, imageQuality, ttsModel, ttsVoice }) {
+	constructor({ apiKey, baseUrl, textModel, imageModel, imageQuality, ttsModel, ttsVoice, visionModel, transcribeModel }) {
 		Object.assign(this, { apiKey, baseUrl, textModel, imageModel, imageQuality, ttsModel, ttsVoice });
+		this.visionModel = visionModel || textModel;
+		this.transcribeModel = transcribeModel || 'whisper-1';
 	}
 
 	async request(pathname, body, { binary = false, retries = 2 } = {}) {
 		for (let attempt = 0; ; attempt++) {
+			const form = body instanceof FormData;
 			const res = await fetch(`${this.baseUrl}${pathname}`, {
 				method: 'POST',
-				headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-				body: JSON.stringify(body),
+				headers: form ? { Authorization: `Bearer ${this.apiKey}` } : { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+				body: form ? body : JSON.stringify(body),
 				signal: AbortSignal.timeout(180_000),
 			});
 			if (res.ok) return binary ? Buffer.from(await res.arrayBuffer()) : res.json();
@@ -35,10 +41,11 @@ export class OpenAIClient {
 		}
 	}
 
-	// Chat completion constrained to a JSON schema (Structured Outputs).
-	async json({ system, user, schemaName, schema }) {
+	// Chat completion constrained to a JSON schema (Structured Outputs). `user` is a string, or an
+	// array of content parts (text and images) for vision.
+	async json({ system, user, schemaName, schema, model }) {
 		const data = await this.request('/chat/completions', {
-			model: this.textModel,
+			model: model || this.textModel,
 			messages: [
 				{ role: 'system', content: system },
 				{ role: 'user', content: user },
@@ -73,5 +80,23 @@ export class OpenAIClient {
 		const body = { model: this.ttsModel, voice: this.ttsVoice, input: text, response_format: 'mp3' };
 		if (instructions && !this.ttsModel.startsWith('tts-1')) body.instructions = instructions;
 		return this.request('/audio/speech', body, { binary: true });
+	}
+
+	// Speech-to-text. whisper-1 returns segment and word timings; other models return text only.
+	async transcribe(file) {
+		const timed = this.transcribeModel.startsWith('whisper');
+		const form = new FormData();
+		form.append('file', new Blob([await fs.promises.readFile(file)], { type: 'audio/mpeg' }), path.basename(file));
+		form.append('model', this.transcribeModel);
+		form.append('response_format', timed ? 'verbose_json' : 'json');
+		if (timed) { form.append('timestamp_granularities[]', 'segment'); form.append('timestamp_granularities[]', 'word'); }
+		const data = await this.request('/audio/transcriptions', form);
+		const num = (v) => Math.round(Number(v) * 100) / 100;
+		return {
+			language: data.language || null,
+			text: String(data.text || '').trim(),
+			segments: (data.segments || []).map((s) => ({ start: num(s.start), end: num(s.end), text: String(s.text || '').trim() })),
+			words: (data.words || []).map((w) => ({ start: num(w.start), end: num(w.end), word: String(w.word || '').trim() })),
+		};
 	}
 }

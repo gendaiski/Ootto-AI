@@ -15,6 +15,10 @@
 			<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--accent-ink)" stroke-width="3.2"/><circle cx="24.5" cy="8" r="2.4" fill="var(--accent-ink)"/></svg>
 			<span>ootto <em>studio</em></span>
 		</a>
+		<nav class="tabs" aria-label="Sections">
+			<button class="tab" type="button" data-tab="plan" aria-current="page">Plan &amp; review</button>
+			<button class="tab" type="button" data-tab="watch">Watch &amp; remake</button>
+		</nav>
 		<div class="status" id="status" aria-live="polite"></div>
 		<div class="brand-pick" id="brand-pick" hidden>
 			<label class="sr" for="brand-select">Brand</label>
@@ -90,7 +94,65 @@
 			<article class="detail card" id="detail" aria-live="polite"></article>
 		</div>
 	</section>
+
+	<!-- Watch & remake -->
+	<section id="watch" hidden>
+		<div class="ws-head">
+			<div>
+				<p class="eyebrow" id="w-eyebrow">Learn from reels that work</p>
+				<h1>Watch &amp; remake</h1>
+				<p class="lede">Paste reel links or upload a video. Ootto watches each one frame by frame, listens to it, and breaks down the hook, structure, pacing and layout. Then remake the format for your business, or compare several reels to find what they share.</p>
+			</div>
+		</div>
+
+		<form class="card watch-add" id="watch-form" novalidate>
+			<label for="w-urls">Reel links <span class="opt">one per line: Instagram, TikTok, YouTube Shorts…</span></label>
+			<textarea id="w-urls" rows="3" placeholder="https://www.instagram.com/reel/…"></textarea>
+			<div class="form-actions">
+				<button class="btn btn-accent" type="submit" id="w-go">Watch</button>
+				<label class="btn btn-ghost" id="w-upload-btn">Upload a video<input type="file" id="w-file" accept="video/*" class="sr" /></label>
+				<span class="form-msg" id="w-msg" role="status"></span>
+			</div>
+			<p class="hint" id="w-hint"></p>
+		</form>
+
+		<div class="lib-head">
+			<h2>Watched reels</h2>
+			<button class="btn btn-ghost btn-sm" type="button" id="w-compare" disabled>Find patterns</button>
+		</div>
+		<ul class="library" id="library" aria-label="Watched reels"></ul>
+
+		<div class="review" id="w-review">
+			<div class="stage"><div class="phone"><div class="phone-screen" id="w-screen"></div></div></div>
+			<article class="detail card" id="w-detail" aria-live="polite"></article>
+		</div>
+
+		<div class="lib-head" id="pat-head">
+			<h2>Patterns</h2>
+			<p class="hint">Tick “Compare” on two or more watched reels, then Find patterns.</p>
+		</div>
+		<ul class="profiles" id="profiles" aria-label="Patterns"></ul>
+	</section>
 </main>
+
+<dialog id="remake-dialog" class="dialog">
+	<form method="dialog" id="remake-form">
+		<h2>Remake this reel</h2>
+		<p class="hint" id="rm-from"></p>
+		<label class="field">For<select id="rm-brand"></select></label>
+		<fieldset class="modes">
+			<legend class="sr">How to remake it</legend>
+			<label class="mode"><input type="radio" name="rm-mode" value="format" checked /><span><b>Same format, new content</b><small>Same beats, timing, hook style, shots and text placement. A new script and new visuals about your business.</small></span></label>
+			<label class="mode"><input type="radio" name="rm-mode" value="exact" /><span><b>Exact remake</b><small>Keeps the original words and timing, with new visuals and a new voice. Only for your own reels or reels you have the rights to.</small></span></label>
+		</fieldset>
+		<label class="check" id="rm-rights-row" hidden><input type="checkbox" id="rm-rights" /> <span>This is my own reel, or I have the rights to reuse its words.</span></label>
+		<label class="field">Post on<input type="datetime-local" id="rm-when" /></label>
+		<div class="form-actions">
+			<button class="btn btn-ghost" value="cancel" formnovalidate type="submit">Cancel</button>
+			<button class="btn btn-accent" value="send" type="submit" id="rm-send">Create remake</button>
+		</div>
+	</form>
+</dialog>
 
 <dialog id="fb-dialog" class="dialog">
 	<form method="dialog" id="fb-form">

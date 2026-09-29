@@ -15,10 +15,14 @@ const el = (tag, attrs = {}, ...kids) => {
 const kids = (...xs) => xs.flat().filter((x) => x != null && x !== false);
 const svg = (d) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = d; return s; };
 
-const state = { status: null, brands: [], brandId: null, reels: [], selectedId: null, busy: false };
+const state = {
+	status: null, brands: [], brandId: null, reels: [], selectedId: null, busy: false,
+	tab: 'plan', onboarding: false,
+	sources: [], sourceId: null, picked: new Set(), profiles: [], profileId: null,
+};
 const BUSY = new Set(['queued', 'rendering', 'posting']);
 const LABEL = { queued: 'Queued', rendering: 'Rendering', ready: 'Needs review', approved: 'Approved', posting: 'Posting', posted: 'Posted', failed: 'Failed' };
-const FORMAT = { tips: 'Tips', myth_vs_fact: 'Myth vs fact', behind_the_scenes: 'Behind the scenes', customer_story: 'Customer story', how_to: 'How-to', offer: 'Offer', faq: 'FAQ' };
+const FORMAT = { tips: 'Tips', myth_vs_fact: 'Myth vs fact', behind_the_scenes: 'Behind the scenes', customer_story: 'Customer story', how_to: 'How-to', offer: 'Offer', faq: 'FAQ', remake: 'Remake' };
 
 async function api(path, opts = {}) {
 	const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
@@ -57,9 +61,26 @@ function renderBrandPicker() {
 	sel.replaceChildren(...state.brands.map((b) => el('option', { value: b.id, selected: b.id === state.brandId }, b.name)));
 }
 
+// Which main view shows: the Plan tab (onboarding or the week) or the Watch tab.
+function applyView() {
+	const plan = state.tab === 'plan';
+	$('#watch').hidden = plan;
+	$('#onboard').hidden = !plan || !(state.onboarding || !state.brands.length);
+	$('#workspace').hidden = !plan || !$('#onboard').hidden || !state.brandId;
+	for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-current', b.dataset.tab === state.tab ? 'page' : 'false');
+}
+
+function setTab(tab) {
+	state.tab = tab === 'watch' ? 'watch' : 'plan';
+	try { localStorage.setItem('ootto.tab', state.tab); } catch {}
+	applyView();
+	if (state.tab === 'watch') renderWatch();
+}
+
 function showOnboarding(show) {
-	$('#onboard').hidden = !show;
-	$('#workspace').hidden = show || !state.brandId;
+	state.onboarding = show;
+	if (show) state.tab = 'plan';
+	applyView();
 	if (show) setTimeout(() => $('#f-website').focus(), 50);
 }
 
@@ -149,6 +170,8 @@ function renderDetail() {
 				el('span', {}, FORMAT[p.format] || p.format),
 				r.media?.duration ? el('span', {}, `${r.media.duration.toFixed(1)} s`) : null,
 				el('span', {}, `${p.scenes.length} scenes`),
+				r.origin?.type === 'remake' ? el('span', { class: 'origin' }, `Remake of ${r.origin.label}${r.origin.mode === 'exact' ? ' · exact' : ' · same format'}`) : null,
+				r.origin?.type === 'patterns' ? el('span', { class: 'origin' }, `From patterns: ${r.origin.label}`) : null,
 			),
 		),
 	);
@@ -243,7 +266,7 @@ $('#fb-dialog').addEventListener('close', async () => {
 $('#btn-approve').addEventListener('click', approve);
 $('#btn-change').addEventListener('click', requestChanges);
 document.addEventListener('keydown', (e) => {
-	if ($('#fb-dialog').open || e.target.closest('input, textarea, select, video')) return;
+	if (state.tab !== 'plan' || $('#fb-dialog').open || $('#remake-dialog').open || e.target.closest('input, textarea, select, video')) return;
 	if (e.key === 'ArrowRight') { e.preventDefault(); approve(); }
 	if (e.key === 'ArrowLeft') { e.preventDefault(); requestChanges(); }
 });
@@ -266,8 +289,10 @@ $('#brand-form').addEventListener('submit', async (e) => {
 		setBusy(btn, true, 'Writing the week…');
 		await api(`/api/brands/${brand.id}/week`, { method: 'POST', body: { count: Number(body.count), startDate: body.startDate } });
 		e.target.reset(); msg.textContent = '';
+		$('#f-start').value = isoDay(new Date(Date.now() + 86400000));
+		state.onboarding = false;
 		await refresh(true);
-		showOnboarding(false);
+		applyView();
 	} catch (err) {
 		msg.textContent = err.message; msg.className = 'form-msg err';
 	} finally { setBusy(btn, false, 'Plan my week'); }
@@ -287,13 +312,298 @@ $('#more-form').addEventListener('submit', async (e) => {
 $('#brand-select').addEventListener('change', (e) => { state.brandId = e.target.value; state.selectedId = null; try { localStorage.setItem('ootto.brand', state.brandId); } catch {} refresh(true); });
 $('#new-brand').addEventListener('click', () => showOnboarding(true));
 
+// ---------- watch & remake ----------
+const SBUSY = new Set(['queued', 'watching']);
+const SLABEL = { queued: 'Queued', watching: 'Watching', ready: 'Watched', failed: 'Failed' };
+const words = (s) => String(s || '').replace(/_/g, ' ');
+const cap = (s) => { const w = words(s); return w.charAt(0).toUpperCase() + w.slice(1); };
+const purpose = (p) => (p === 'cta' ? 'CTA' : cap(p));
+const HOOK = { question: 'Question', bold_claim: 'Bold claim', number_or_stat: 'Number or stat', mistake_warning: 'Mistake warning', curiosity_gap: 'Curiosity gap', how_to_promise: 'How-to promise', list_promise: 'List promise', story_open: 'Story opener', contrarian: 'Contrarian', pov: 'POV', before_after: 'Before / after', other: 'Other' };
+const secs = (n) => `${Number(n).toFixed(1)} s`;
+const compact = (n) => (n == null ? null : Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n));
+
+function selectedSource() { return state.sources.find((x) => x.id === state.sourceId); }
+
+function renderWatch() {
+	const st = state.status;
+	const hint = $('#w-hint');
+	const parts = [];
+	if (st?.watch) {
+		parts.push(st.watch.downloader
+			? `Links are downloaded with yt-dlp ${st.watch.downloader}. Instagram sometimes needs a login: set YTDLP_COOKIES_FROM_BROWSER in .env, or upload the file.`
+			: st.mode === 'demo' ? 'This demo shows reels watched earlier. Watching new links needs the studio running on your computer.'
+			: 'yt-dlp is not installed, so links cannot be downloaded yet (pip install yt-dlp). Uploading a video works.');
+		parts.push(`Up to ${Math.round(st.watch.maxSeconds / 60)} min per video.`);
+	}
+	if (st?.mode === 'mock') parts.push('Mock mode: cuts, pacing and frames are measured; add an OpenAI key to read the text, visuals and speech.');
+	hint.textContent = parts.join(' ');
+	const ready = state.sources.filter((x) => x.status === 'ready').length;
+	$('#w-eyebrow').textContent = state.sources.length ? `${state.sources.length} watched · ${ready} analysed · ${state.profiles.length} pattern set${state.profiles.length === 1 ? '' : 's'}` : 'Learn from reels that work';
+	renderLibrary(); renderSourceStage(); renderSourceDetail(); renderProfiles();
+}
+
+function renderLibrary() {
+	const list = $('#library');
+	const n = state.picked.size;
+	const cmp = $('#w-compare');
+	cmp.disabled = n < 2;
+	cmp.textContent = n ? `Find patterns in ${n} reels` : 'Find patterns';
+	if (!state.sources.length) { list.replaceChildren(el('li', { class: 'card empty', style: 'grid-column:1/-1' }, 'No reels yet. Paste a link above or upload a video.')); return; }
+	list.replaceChildren(...state.sources.map((x) => {
+		const busy = SBUSY.has(x.status);
+		const thumb = el('div', { class: 'thumb', style: x.thumbUrl ? `background-image:url("${x.thumbUrl}")` : null });
+		if (busy) thumb.append(el('div', { class: 'spin' }, el('div', { class: 'spinner' })));
+		const facts = [x.video?.duration ? secs(x.video.duration) : null, x.meta?.views != null ? `${compact(x.meta.views)} views` : null].filter(Boolean).join(' · ');
+		return el('li', { class: 'lib-item' },
+			el('button', { class: 'day-btn', type: 'button', 'aria-current': x.id === state.sourceId ? 'true' : 'false', onclick: () => { state.sourceId = x.id; renderWatch(); } },
+				thumb,
+				el('div', { class: 'day-title' }, x.label),
+				facts ? el('div', { class: 'day-when' }, facts) : null,
+				el('span', { class: `tag ${busy ? 'busy' : x.status === 'ready' ? 'approved' : x.status}` }, busy ? (x.progress || SLABEL[x.status]) : SLABEL[x.status] || x.status),
+			),
+			x.status === 'ready' ? el('label', { class: 'pick' }, el('input', { type: 'checkbox', checked: state.picked.has(x.id), onchange: (e) => { e.target.checked ? state.picked.add(x.id) : state.picked.delete(x.id); renderLibrary(); } }), 'Compare') : null,
+		);
+	}));
+}
+
+let shownSourceVideo = null;
+function renderSourceStage() {
+	const x = selectedSource(); const screen = $('#w-screen');
+	if (!x) { shownSourceVideo = null; screen.replaceChildren(el('div', { class: 'msg' }, 'Watched reels play here.')); return; }
+	if (x.videoUrl) {
+		if (shownSourceVideo === x.videoUrl) return;
+		shownSourceVideo = x.videoUrl;
+		screen.replaceChildren(el('video', { id: 'w-video', poster: x.thumbUrl, controls: true, playsinline: true, preload: 'metadata', 'aria-label': `Watched reel: ${x.label}` },
+			el('source', { src: x.videoUrl, type: 'video/mp4' }),
+			x.videoWebmUrl ? el('source', { src: x.videoWebmUrl, type: 'video/webm' }) : null));
+		return;
+	}
+	shownSourceVideo = null;
+	if (x.status === 'failed') { screen.replaceChildren(el('div', { class: 'msg' }, 'Could not watch this one.', el('small', {}, 'See the reason on the right.'))); return; }
+	screen.replaceChildren(el('div', { class: 'msg' }, el('div', { class: 'spinner' }), x.progress || SLABEL[x.status]));
+}
+
+function seek(t) {
+	const v = $('#w-video'); if (!v) return;
+	const go = () => { v.currentTime = t; v.play().catch(() => {}); };
+	if (v.readyState >= 1) go(); else { v.addEventListener('loadedmetadata', go, { once: true }); v.load(); }
+}
+
+function frameAt(x, t) {
+	const fr = x.frames || [];
+	return fr.find((f) => f.t >= t) || fr.at(-1);
+}
+
+function stat(label, value) { return el('div', { class: 'stat' }, el('b', {}, value), el('span', {}, label)); }
+
+function renderSourceDetail() {
+	const d = $('#w-detail'); const x = selectedSource();
+	if (!x) { d.replaceChildren(el('div', { class: 'empty' }, 'Watch a reel to see its breakdown here.')); return; }
+	const busy = SBUSY.has(x.status);
+	const b = x.breakdown;
+	const m = x.meta || {};
+	const head = el('div', { class: 'detail-head' }, el('div', {},
+		el('h2', {}, m.title || x.label),
+		el('div', { class: 'meta' },
+			el('span', { class: `tag ${busy ? 'busy' : x.status === 'ready' ? 'approved' : x.status}` }, SLABEL[x.status] || x.status),
+			m.platform ? el('span', {}, m.platform) : null,
+			m.uploader ? el('span', {}, `@${String(m.uploader).replace(/^@/, '')}`) : null,
+			m.views != null ? el('span', {}, `${compact(m.views)} views`) : null,
+			m.likes != null ? el('span', {}, `${compact(m.likes)} likes`) : null,
+			m.url ? el('a', { href: m.url, target: '_blank', rel: 'noopener' }, 'Open original') : null,
+		)));
+	const actions = el('div', { class: 'actions' },
+		el('button', { class: 'btn btn-accent btn-sm', type: 'button', disabled: x.status !== 'ready', onclick: () => openRemake(x) }, 'Remake for my business'),
+		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: busy, onclick: () => sourceAct(x, 'watch', 'POST', 'Watching again') }, 'Watch again'),
+		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: x.status === 'watching', onclick: () => { if (confirm('Remove this reel from the library?')) sourceAct(x, '', 'DELETE', 'Removed'); } }, 'Remove'),
+	);
+	if (!b) {
+		d.replaceChildren(...kids(head, busy ? el('div', { class: 'progress' }, el('div', { class: 'spinner' }), x.progress || SLABEL[x.status]) : null, x.error ? el('div', { class: 'error' }, x.error) : null, x.url ? field('Link', el('p', { class: 'mono' }, x.url)) : null, actions));
+		return;
+	}
+	const total = b.pacing.seconds || 1;
+	const timeline = el('div', { class: 'timeline', role: 'list', 'aria-label': 'Beats' }, b.beats.map((bt, i) => el('button', {
+		class: `seg p-${bt.purpose}`, type: 'button', role: 'listitem', style: `flex:${Math.max(0.2, bt.end - bt.start)}`,
+		title: `${i + 1}. ${purpose(bt.purpose)} · ${secs(bt.start)}–${secs(bt.end)}`, 'aria-label': `Beat ${i + 1}, ${purpose(bt.purpose)}, from ${secs(bt.start)}`, onclick: () => seek(bt.start),
+	})));
+	const beatList = el('ol', { class: 'beats' }, b.beats.map((bt, i) => {
+		const f = frameAt(x, bt.start);
+		return el('li', {}, el('button', { class: 'beat', type: 'button', onclick: () => seek(bt.start) },
+			f ? el('img', { src: f.url, alt: '', loading: 'lazy' }) : el('span', { class: 'noimg' }),
+			el('div', { class: 'beat-body' },
+				el('div', { class: 'beat-top' }, el('span', { class: `dot p-${bt.purpose}` }), el('b', {}, purpose(bt.purpose)), el('span', {}, `${secs(bt.start)} – ${secs(bt.end)}`), el('span', {}, cap(bt.shot))),
+				bt.on_screen_text ? el('div', { class: 'ost' }, bt.on_screen_text) : null,
+				bt.spoken ? el('p', { class: 'vo' }, `“${bt.spoken}”`) : null,
+				bt.visual ? el('div', { class: 'vis' }, bt.visual) : null,
+			)));
+	}));
+	d.replaceChildren(...kids(
+		head,
+		busy ? el('div', { class: 'progress' }, el('div', { class: 'spinner' }), x.progress || SLABEL[x.status]) : null,
+		x.error ? el('div', { class: 'error' }, x.error) : null,
+		(x.warnings || []).map((w) => el('div', { class: 'note' }, w)),
+		b.summary ? el('p', { class: 'lede', style: 'margin:0' }, b.summary) : null,
+		el('div', { class: 'stats' },
+			stat('Length', secs(b.pacing.seconds)), stat('Beats', b.pacing.beats), stat('Avg beat', secs(b.pacing.avg_beat_seconds)),
+			stat('Cuts / 10 s', b.pacing.cuts_per_10s), stat('Format', cap(b.format)), stat('Text', cap(b.layout.text_position))),
+		field('Hook', el('div', { class: 'hookbox' },
+			el('div', { class: 'meta', style: 'margin:0 0 6px' }, el('span', { class: 'tag approved' }, HOOK[b.hook.type] || words(b.hook.type)), el('span', {}, `first ${secs(b.hook.seconds)}`)),
+			b.hook.on_screen_text ? el('p', { class: 'hook' }, b.hook.on_screen_text) : null,
+			b.hook.spoken ? el('p', { class: 'vo' }, `“${b.hook.spoken}”`) : null,
+			b.hook.why_it_works ? el('p', { class: 'why' }, b.hook.why_it_works) : null)),
+		field('Structure', timeline, el('div', { class: 'legend' }, [...new Set(b.beats.map((bt) => bt.purpose))].map((p) => el('span', {}, el('span', { class: `dot p-${p}` }), purpose(p)))), beatList),
+		b.pacing.notes ? field('Pacing', el('p', { style: 'margin:0' }, b.pacing.notes)) : null,
+		b.layout.caption_style || b.layout.framing ? field('Visual layout', el('ul', { class: 'plain' }, [
+			b.layout.caption_style && `Text: ${b.layout.caption_style}`, b.layout.framing && `Framing: ${b.layout.framing}`, b.layout.colors && `Look: ${b.layout.colors}`,
+			b.audio.music && `Music: ${b.audio.music}`, b.audio.notes && `Sound: ${b.audio.notes}`,
+		].filter(Boolean).map((t) => el('li', {}, t)))) : null,
+		b.why_it_works.length ? field('Why it works', el('ul', { class: 'plain' }, b.why_it_works.map((t) => el('li', {}, t)))) : null,
+		b.template ? field('Reusable template', el('pre', { class: 'caption' }, b.template)) : null,
+		x.transcript?.text ? el('details', { class: 'more-box' }, el('summary', {}, `Transcript (${x.transcript.source === 'openai' ? 'OpenAI' : x.transcript.source})`), el('p', {}, x.transcript.text)) : null,
+		m.caption ? el('details', { class: 'more-box' }, el('summary', {}, 'Post caption'), el('pre', { class: 'caption' }, m.caption)) : null,
+		el('p', { class: 'hint' }, `Analysed with ${x.analyzedWith || 'the studio'} · ${x.frames.length} key frames · ${x.cuts.length} cuts measured`),
+		actions,
+	));
+}
+
+async function sourceAct(x, action, method, okMsg) {
+	try {
+		await api(`/api/sources/${x.id}${action ? `/${action}` : ''}`, { method });
+		toast(okMsg);
+	} catch (e) { toast(e.message, true); }
+	await refresh();
+}
+
+$('#watch-form').addEventListener('submit', async (e) => {
+	e.preventDefault();
+	const urls = $('#w-urls').value.split(/\s+/).map((u) => u.trim()).filter(Boolean);
+	const msg = $('#w-msg'); msg.className = 'form-msg';
+	if (!urls.length) { msg.textContent = 'Paste at least one link.'; msg.className = 'form-msg err'; return; }
+	const btn = $('#w-go');
+	try {
+		setBusy(btn, true, 'Adding…');
+		const out = await api('/api/sources', { method: 'POST', body: { urls } });
+		$('#w-urls').value = '';
+		msg.textContent = `Watching ${out.added.length} reel${out.added.length === 1 ? '' : 's'}${out.skipped ? ` (${out.skipped} already in the library)` : ''}.`;
+		if (out.added[0]) state.sourceId = out.added[0].id;
+		await refresh();
+	} catch (err) { msg.textContent = err.message; msg.className = 'form-msg err'; } finally { setBusy(btn, false, 'Watch'); }
+});
+
+$('#w-file').addEventListener('change', async (e) => {
+	const file = e.target.files?.[0]; if (!file) return;
+	const msg = $('#w-msg'); msg.className = 'form-msg'; msg.textContent = `Uploading ${file.name}…`;
+	try {
+		const res = await fetch(`/api/sources/upload?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+		msg.textContent = `Watching ${file.name}.`;
+		state.sourceId = data.id;
+		await refresh();
+	} catch (err) { msg.textContent = err.message; msg.className = 'form-msg err'; }
+	e.target.value = '';
+});
+
+$('#w-compare').addEventListener('click', async () => {
+	const btn = $('#w-compare');
+	try {
+		setBusy(btn, true, 'Comparing…');
+		const p = await api('/api/patterns', { method: 'POST', body: { sourceIds: [...state.picked] } });
+		state.picked.clear(); state.profileId = p.id;
+		toast('Patterns found');
+		await refresh();
+		$('#pat-head').scrollIntoView({ behavior: 'smooth', block: 'start' });
+	} catch (err) { toast(err.message, true); setBusy(btn, false); renderLibrary(); }
+});
+
+// ---------- remake dialog ----------
+let remakeSource = null;
+function openRemake(x) {
+	if (!state.brands.length) { toast('Add your business first, then remake reels for it.', true); showOnboarding(true); return; }
+	remakeSource = x;
+	$('#rm-from').textContent = `From ${x.label}: ${x.breakdown.pacing.beats} beats, ${secs(x.breakdown.pacing.seconds)}.`;
+	$('#rm-brand').replaceChildren(...state.brands.map((b) => el('option', { value: b.id, selected: b.id === state.brandId }, b.name)));
+	document.querySelector('input[name="rm-mode"][value="format"]').checked = true;
+	$('#rm-rights').checked = false; $('#rm-rights-row').hidden = true;
+	const d = new Date(Date.now() + 86400000); d.setHours(18, 0, 0, 0);
+	$('#rm-when').value = localInput(d.toISOString());
+	$('#remake-dialog').showModal();
+}
+$('#remake-form').addEventListener('change', () => { $('#rm-rights-row').hidden = document.querySelector('input[name="rm-mode"]:checked').value !== 'exact'; $('#rm-rights-row').classList.remove('need'); });
+$('#rm-send').addEventListener('click', (e) => {
+	if (document.querySelector('input[name="rm-mode"]:checked').value === 'exact' && !$('#rm-rights').checked) {
+		e.preventDefault(); $('#rm-rights-row').classList.add('need'); $('#rm-rights').focus();
+	}
+});
+$('#remake-dialog').addEventListener('close', async () => {
+	if ($('#remake-dialog').returnValue !== 'send' || !remakeSource) return;
+	const mode = document.querySelector('input[name="rm-mode"]:checked').value;
+	const brandId = $('#rm-brand').value;
+	toast(mode === 'exact' ? 'Setting up the exact remake…' : 'Writing the remake…');
+	try {
+		const when = $('#rm-when').value ? new Date($('#rm-when').value).toISOString() : undefined;
+		const reel = await api(`/api/sources/${remakeSource.id}/remake`, { method: 'POST', body: { brandId, mode, rightsConfirmed: mode === 'exact' ? true : undefined, scheduledAt: when } });
+		state.brandId = brandId; state.selectedId = reel.id;
+		try { localStorage.setItem('ootto.brand', brandId); } catch {}
+		toast('Remake created. Rendering now.');
+		setTab('plan');
+		await refresh();
+		select(reel.id);
+	} catch (e) { toast(e.message, true); }
+});
+
+// ---------- patterns ----------
+function renderProfiles() {
+	const list = $('#profiles');
+	if (!state.profiles.length) { list.replaceChildren(el('li', { class: 'card empty' }, 'No patterns yet. Compare two or more watched reels to find what they share.')); return; }
+	list.replaceChildren(...state.profiles.map((pr) => {
+		const p = pr.profile; const open = pr.id === state.profileId;
+		const m = p.measured || {};
+		const count = el('select', { 'aria-label': 'How many reels' }, [3, 5, 7].map((n) => el('option', { selected: n === 5 }, String(n))));
+		return el('li', { class: `card profile${open ? ' open' : ''}` },
+			el('button', { class: 'profile-head', type: 'button', 'aria-expanded': open ? 'true' : 'false', onclick: () => { state.profileId = open ? null : pr.id; renderProfiles(); } },
+				el('div', {}, el('h3', {}, pr.name), el('div', { class: 'meta' },
+					el('span', {}, `${m.reels} reels`), el('span', {}, `avg ${secs(m.avg_seconds)}`), el('span', {}, `beats ~${secs(m.avg_beat_seconds)}`),
+					m.total_views != null ? el('span', {}, `${compact(m.total_views)} views studied`) : null)),
+				el('span', { class: 'chev', 'aria-hidden': 'true' }, open ? '−' : '+')),
+			open ? el('div', { class: 'profile-body' },
+				p.summary ? el('p', { style: 'margin:0' }, p.summary) : null,
+				p.hook_patterns.length ? field('Hooks that repeat', el('ul', { class: 'plain' }, p.hook_patterns.map((h) => el('li', {}, el('span', { class: 'tag approved' }, HOOK[h.type] || words(h.type)), ' ', h.template)))) : null,
+				p.structure.length ? field('Structure', el('div', { class: 'chain' }, p.structure.map((s) => el('span', { class: `chip-s p-${s}` }, purpose(s))))) : null,
+				el('div', { class: 'stats' }, stat('Target length', secs(p.length_seconds)), stat('Beat length', secs(p.beat_seconds)), stat('Text', cap(p.text_position)), stat('Formats', p.formats.map(cap).join(', ') || '—')),
+				p.do.length ? field('Do', el('ul', { class: 'plain' }, p.do.map((t) => el('li', {}, t)))) : null,
+				p.avoid.length ? field('Avoid', el('ul', { class: 'plain' }, p.avoid.map((t) => el('li', {}, t)))) : null,
+				p.cta_patterns.length ? field('Calls to action', el('ul', { class: 'plain' }, p.cta_patterns.map((t) => el('li', {}, t)))) : null,
+				el('div', { class: 'actions' },
+					count,
+					el('button', { class: 'btn btn-accent btn-sm', type: 'button', onclick: (e) => planFromPatterns(pr, Number(count.value), e.currentTarget) }, 'Plan new reels from these patterns'),
+					el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: async () => { if (!confirm('Delete these patterns?')) return; try { await api(`/api/patterns/${pr.id}`, { method: 'DELETE' }); } catch (e) { toast(e.message, true); } refresh(); } }, 'Delete')),
+			) : null,
+		);
+	}));
+}
+
+async function planFromPatterns(pr, count, btn) {
+	if (!state.brandId) { toast('Add your business first.', true); showOnboarding(true); return; }
+	try {
+		setBusy(btn, true, 'Writing…');
+		await api(`/api/brands/${state.brandId}/week`, { method: 'POST', body: { count, startDate: isoDay(new Date(Date.now() + 86400000)), profileId: pr.id } });
+		toast(`${count} new reels planned from “${pr.name}”. Rendering now.`);
+		setTab('plan');
+		await refresh(true);
+	} catch (e) { toast(e.message, true); setBusy(btn, false, 'Plan new reels from these patterns'); }
+}
+
 // ---------- data loop ----------
 let pollTimer;
 async function refresh(pickFirst = false) {
 	clearTimeout(pollTimer);
 	try {
-		const [status, brands] = await Promise.all([api('/api/status'), api('/api/brands')]);
-		state.status = status; state.brands = brands;
+		const [status, brands, sources, profiles] = await Promise.all([api('/api/status'), api('/api/brands'), api('/api/sources'), api('/api/patterns')]);
+		state.status = status; state.brands = brands; state.sources = sources; state.profiles = profiles;
+		for (const id of state.picked) if (!sources.some((x) => x.id === id && x.status === 'ready')) state.picked.delete(id);
+		if (!sources.some((x) => x.id === state.sourceId)) state.sourceId = sources[0]?.id || null;
+		if (!profiles.some((x) => x.id === state.profileId)) state.profileId = profiles[0]?.id || null;
 		if (!state.brandId || !brands.some((b) => b.id === state.brandId)) {
 			let saved = null; try { saved = localStorage.getItem('ootto.brand'); } catch {}
 			state.brandId = brands.some((b) => b.id === saved) ? saved : brands.at(-1)?.id || null;
@@ -304,14 +614,17 @@ async function refresh(pickFirst = false) {
 		}
 		try { if (state.brandId) localStorage.setItem('ootto.brand', state.brandId); } catch {}
 		renderStatus(); renderBrandPicker();
-		if (!state.brands.length) showOnboarding(true);
-		else if ($('#onboard').hidden) { $('#workspace').hidden = false; }
+		applyView();
 		renderWeek(); renderStage(); renderDetail();
+		if (state.tab === 'watch') renderWatch();
 	} catch (e) { toast(`Cannot reach the studio server: ${e.message}`, true); }
-	const working = state.reels.some((r) => BUSY.has(r.status));
+	const working = state.reels.some((r) => BUSY.has(r.status)) || state.sources.some((x) => SBUSY.has(x.status));
 	pollTimer = setTimeout(() => refresh(), working ? 2500 : 15000);
 }
 
 const t = new Date(Date.now() + 86400000);
 $('#f-start').value = isoDay(t); $('#more-start').value = isoDay(t);
+try { state.tab = localStorage.getItem('ootto.tab') === 'watch' ? 'watch' : 'plan'; } catch {}
+if (location.hash === '#watch') state.tab = 'watch';
+for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setTab(b.dataset.tab));
 refresh(true);

@@ -1,6 +1,8 @@
-// Background work: a single-worker render queue and the posting scheduler.
+// Background work: a single-worker render queue, a single-worker watch queue (downloading and
+// analysing reels) and the posting scheduler.
 import path from 'node:path';
 import { renderReel } from './render.js';
+import { watchSource } from './watch.js';
 import { publishReel, captionFor } from './instagram.js';
 import { instagramReady } from './config.js';
 
@@ -10,6 +12,8 @@ export class Jobs {
 		this.queue = [];
 		this.running = false;
 		this.publishing = new Set();
+		this.watchQueue = [];
+		this.watching = false;
 	}
 
 	// Re-queue anything interrupted by a restart.
@@ -17,6 +21,38 @@ export class Jobs {
 		for (const r of this.store.reels()) {
 			if (r.status === 'rendering' || r.status === 'queued') this.enqueueRender(r.id);
 			if (r.status === 'posting') this.store.updateReel(r.id, { status: 'approved', progress: '' });
+		}
+		for (const s of this.store.sources()) if (s.status === 'queued' || s.status === 'watching') this.enqueueWatch(s.id);
+	}
+
+	enqueueWatch(id) {
+		if (!this.watchQueue.includes(id)) this.watchQueue.push(id);
+		this.store.updateSource(id, { status: 'queued', progress: 'Waiting to watch', error: null });
+		this.drainWatch();
+	}
+
+	async drainWatch() {
+		if (this.watching) return;
+		this.watching = true;
+		try {
+			while (this.watchQueue.length) {
+				const id = this.watchQueue.shift();
+				const source = this.store.source(id);
+				if (!source) continue;
+				this.store.updateSource(id, { status: 'watching', progress: 'Starting' });
+				try {
+					const result = await watchSource({
+						source, dir: this.store.reelDir(id), provider: this.provider, cfg: this.cfg,
+						onProgress: (m) => this.store.updateSource(id, { progress: m }),
+					});
+					if (this.store.source(id)) this.store.updateSource(id, { ...result, status: 'ready', progress: '', error: null });
+				} catch (e) {
+					this.log.error(`[watch ${id}]`, e.message);
+					if (this.store.source(id)) this.store.updateSource(id, { status: 'failed', progress: '', error: e.message });
+				}
+			}
+		} finally {
+			this.watching = false;
 		}
 	}
 

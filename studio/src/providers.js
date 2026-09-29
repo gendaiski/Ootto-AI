@@ -1,6 +1,6 @@
 // Content providers. "openai" calls the OpenAI API; "mock" produces the same shapes offline
-// (placeholder art rendered with ffmpeg, silent voice tracks, template scripts) so the whole
-// pipeline can be exercised without a key.
+// (placeholder art rendered with ffmpeg, silent voice tracks, template scripts, measured-only reel
+// analysis) so the whole pipeline can be exercised without a key.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -13,16 +13,21 @@ export function createProvider(cfg) {
 		const client = new OpenAIClient(cfg.openai);
 		return {
 			name: 'openai',
-			models: { text: cfg.openai.textModel, image: cfg.openai.imageModel, voice: `${cfg.openai.ttsModel} (${cfg.openai.ttsVoice})` },
+			models: { text: cfg.openai.textModel, image: cfg.openai.imageModel, voice: `${cfg.openai.ttsModel} (${cfg.openai.ttsVoice})`, vision: cfg.openai.visionModel || cfg.openai.textModel, transcribe: cfg.openai.transcribeModel || 'whisper-1' },
 			json: (req) => client.json(req),
+			vision: (req) => client.json({ ...req, model: cfg.openai.visionModel || cfg.openai.textModel }),
+			transcribe: (file) => client.transcribe(file),
 			image: async (prompt, outFile) => fs.promises.writeFile(outFile, await client.image(prompt)),
 			speech: async (text, outFile, opts) => fs.promises.writeFile(outFile, await client.speech(text, opts)),
 		};
 	}
 	return {
 		name: 'mock',
-		models: { text: 'mock', image: 'mock', voice: 'mock (silent)' },
+		models: { text: 'mock', image: 'mock', voice: 'mock (silent)', vision: 'mock (measured only)', transcribe: 'captions only' },
 		json: async (req) => (req.mock ? req.mock() : { reels: [] }),
+		// Mock mode cannot see or hear: analysis falls back to what ffmpeg measures.
+		vision: async (req) => req.mock(),
+		transcribe: null,
 		image: (prompt, outFile, { index = 0, fontsDir } = {}) => mockImage(prompt, outFile, index, fontsDir),
 		speech: (text, outFile) => mockSpeech(text, outFile),
 	};

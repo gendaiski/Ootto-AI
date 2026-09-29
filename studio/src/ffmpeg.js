@@ -4,16 +4,17 @@ import ffmpegPath from 'ffmpeg-static';
 
 export const FFMPEG = process.env.FFMPEG_PATH || ffmpegPath;
 
-export function ffmpeg(args, { timeoutMs = 10 * 60 * 1000 } = {}) {
+// full: keep the whole stderr (for filters such as showinfo that report there).
+export function ffmpeg(args, { timeoutMs = 10 * 60 * 1000, full = false } = {}) {
 	return new Promise((resolve, reject) => {
 		const p = spawn(FFMPEG, ['-hide_banner', '-nostdin', '-y', ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
 		let err = '';
-		p.stderr.on('data', (d) => { err = (err + d).slice(-8000); });
+		p.stderr.on('data', (d) => { err = full ? err + d : (err + d).slice(-8000); });
 		const t = setTimeout(() => p.kill('SIGKILL'), timeoutMs);
 		p.on('error', (e) => { clearTimeout(t); reject(e); });
 		p.on('close', (code) => {
 			clearTimeout(t);
-			code === 0 ? resolve(err) : reject(new Error(`ffmpeg exited ${code}: ${err.split('\n').slice(-6).join(' ').trim()}`));
+			code === 0 ? resolve(err) : reject(new Error(`ffmpeg exited ${code}: ${err.split('\n').slice(-6).join(' ').trim().slice(-1200)}`));
 		});
 	});
 }

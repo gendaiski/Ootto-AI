@@ -1,6 +1,8 @@
 // Renders a reel plan into a 1080x1920 H.264/AAC MP4:
 // per-scene image + voiceover -> Ken Burns clip sized to the voice line -> concat ->
 // burned-in headline and word-highlighted captions (libass) -> thumbnail.
+// Plans with timing 'exact' (remakes) keep each scene's length; a voice line that runs long is
+// sped up a little (at most 1.3x) before the scene is allowed to grow.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -28,12 +30,16 @@ const ts = (t) => {
 
 // Build the subtitle script: one boxed headline per scene, captions in 3-5 word chunks with the
 // spoken word highlighted in the accent colour.
-export function buildAss(timeline, { accent = '#C8F53A' } = {}) {
+// Headline placement: top (default), middle, or bottom (above the captions).
+const HEADLINE_POS = { top: [8, 250], middle: [5, 0], bottom: [2, 760] };
+
+export function buildAss(timeline, { accent = '#C8F53A', textPosition = 'top' } = {}) {
+	const [align, marginV] = HEADLINE_POS[textPosition] || HEADLINE_POS.top;
 	const lines = [
 		'[Script Info]', 'ScriptType: v4.00+', `PlayResX: ${W}`, `PlayResY: ${H}`, 'WrapStyle: 0', 'ScaledBorderAndShadow: yes', '',
 		'[V4+ Styles]',
 		'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-		`Style: Headline,DejaVu Sans,86,&H00FFFFFF,&H00FFFFFF,&H3A000000,&H00000000,-1,0,0,0,100,100,0,0,3,26,0,8,110,110,250,1`,
+		`Style: Headline,DejaVu Sans,86,&H00FFFFFF,&H00FFFFFF,&H3A000000,&H00000000,-1,0,0,0,100,100,0,0,3,26,0,${align},110,110,${marginV},1`,
 		`Style: Caption,DejaVu Sans,60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,3,2,110,110,470,1`,
 		'', '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
 	];
@@ -76,6 +82,7 @@ export async function renderReel({ plan, dir, provider, cfg, force = false, onPr
 	const manifestFile = path.join(dir, 'assets.json');
 	const assets = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : {};
 	const brandStyle = cfg.visualStyle || 'natural light, realistic photography, modern and clean';
+	const exact = plan.timing === 'exact';
 	const timeline = [];
 	let t = 0;
 
@@ -94,9 +101,17 @@ export async function renderReel({ plan, dir, provider, cfg, force = false, onPr
 			onProgress(`Recording voice ${i + 1} of ${n}`);
 			await provider.speech(sc.voiceover, voice, { instructions: 'Upbeat, warm, confident social media narrator. Natural pace.' });
 		}
-		const voiceDuration = sc.voiceover && fs.existsSync(voice) ? (await probe(voice)).duration : 0;
-		const duration = Math.min(15, Math.max(sc.seconds || 3, voiceDuration + 0.35, 2));
-		timeline.push({ index: i, img, voice: sc.voiceover ? voice : null, start: t, end: t + duration, duration, voiceDuration, onScreenText: sc.on_screen_text, voiceover: sc.voiceover });
+		const rawVoice = sc.voiceover && fs.existsSync(voice) ? (await probe(voice)).duration : 0;
+		let tempo = 1, duration;
+		if (exact) {
+			const slot = Math.max(0.5, sc.seconds || 3);
+			if (rawVoice > slot - 0.1) tempo = Math.min(1.3, rawVoice / Math.max(0.3, slot - 0.1));
+			duration = Math.min(20, Math.max(slot, rawVoice / tempo + 0.1));
+		} else {
+			duration = Math.min(15, Math.max(sc.seconds || 3, rawVoice + 0.35, 2));
+		}
+		const voiceDuration = rawVoice / tempo;
+		timeline.push({ index: i, img, voice: sc.voiceover ? voice : null, tempo, start: t, end: t + duration, duration, voiceDuration, onScreenText: sc.on_screen_text, voiceover: sc.voiceover });
 		t += duration;
 		assets[imgKey] = { scene: i, visual: sc.visual };
 		assets[voiceKey] = { scene: i, voiceover: sc.voiceover };
@@ -117,7 +132,8 @@ export async function renderReel({ plan, dir, provider, cfg, force = false, onPr
 			clips.push(clip);
 			const a = path.join(work, `a${sc.index}.wav`);
 			const src = sc.voice ? ['-i', sc.voice] : ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo'];
-			await ffmpeg([...src, '-af', 'apad', '-t', sc.duration.toFixed(3), '-ar', '44100', '-ac', '2', a]);
+			const af = sc.tempo > 1.001 ? `atempo=${sc.tempo.toFixed(3)},apad` : 'apad';
+			await ffmpeg([...src, '-af', af, '-t', sc.duration.toFixed(3), '-ar', '44100', '-ac', '2', a]);
 			audios.push(a);
 		}
 		const list = (files, name) => { const f = path.join(work, name); fs.writeFileSync(f, files.map((x) => `file '${x.replace(/'/g, "'\\''")}'`).join('\n')); return f; };
@@ -127,7 +143,7 @@ export async function renderReel({ plan, dir, provider, cfg, force = false, onPr
 		await ffmpeg(['-f', 'concat', '-safe', '0', '-i', list(audios, 'a.txt'), '-c', 'copy', audio]);
 
 		const assFile = path.join(work, 'subs.ass');
-		fs.writeFileSync(assFile, buildAss(timeline, { accent: cfg.accentColor }));
+		fs.writeFileSync(assFile, buildAss(timeline, { accent: cfg.accentColor, textPosition: plan.layout?.text_position }));
 		onProgress('Adding captions');
 		const out = path.join(dir, 'reel.mp4');
 		const tmpOut = path.join(work, 'reel.mp4');

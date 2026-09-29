@@ -2,7 +2,7 @@
 // so the page works without the local server. Changes are kept in this browser only.
 (() => {
 	const seed = window.__OOTTO_DEMO__;
-	const KEY = 'ootto.demo.v1';
+	const KEY = 'ootto.demo.v2';
 	let db;
 	try { db = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch {}
 	if (!db || db.brand?.id !== seed.brand.id) db = structuredClone(seed);
@@ -26,11 +26,26 @@
 		const url = new URL(typeof input === 'string' ? input : input.url, location.href);
 		if (!url.pathname.startsWith('/api/')) return realFetch(input, init);
 		const method = (init.method || 'GET').toUpperCase();
-		const body = init.body ? JSON.parse(init.body) : {};
+		let body = {};
+		try { body = typeof init.body === 'string' ? JSON.parse(init.body) : {}; } catch {}
 		const parts = url.pathname.split('/').filter(Boolean); // api, reels, id, action
 		await new Promise((r) => setTimeout(r, 120));
 
-		if (url.pathname === '/api/status') return json({ mode: 'demo', models: { text: 'demo', image: 'demo', voice: 'demo' }, instagram: { connected: false, userId: null, publicBaseUrl: null }, queue: 0 });
+		if (url.pathname === '/api/status') return json({ mode: 'demo', models: { text: 'demo', image: 'demo', voice: 'demo' }, instagram: { connected: false, userId: null, publicBaseUrl: null }, watch: { downloader: null, maxSeconds: 600, uploadLimitMb: 300 }, queue: 0, watchQueue: 0 });
+		const LOCAL = 'needs the studio running on your computer with your OpenAI key (see studio/README.md). This demo already includes three watched reels, one pattern set, a remake and a reel planned from the patterns.';
+		if (parts[1] === 'sources') {
+			if (method === 'GET' && !parts[2]) return json(db.sources);
+			const x = db.sources.find((v) => v.id === parts[2]);
+			if (method === 'GET') return x ? json(x) : fail('Watched reel not found.', 404);
+			if (method === 'DELETE' && x) { db.sources = db.sources.filter((v) => v !== x); save(); return json({ ok: true }); }
+			if (parts[3] === 'remake') return fail(`Remaking ${LOCAL}`);
+			return fail(`Watching reels ${LOCAL}`);
+		}
+		if (parts[1] === 'patterns') {
+			if (method === 'GET') return json(db.profiles);
+			if (method === 'DELETE') { db.profiles = db.profiles.filter((v) => v.id !== parts[2]); save(); return json({ ok: true }); }
+			return fail(`Finding patterns ${LOCAL}`);
+		}
 		if (url.pathname === '/api/brands' && method === 'GET') return json([db.brand]);
 		if (parts[1] === 'brands' && method === 'POST') return fail('This demo shows a sample week. Planning new reels needs the studio running on your computer with your OpenAI key (see studio/README.md).');
 		if (url.pathname === '/api/reels') return json(db.reels.slice().sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)).map(view));
@@ -75,7 +90,7 @@
 		const bar = document.createElement('div');
 		bar.className = 'demo-bar';
 		bar.innerHTML = '<div class="wrap"><b>DEMO</b><span></span></div>';
-		bar.querySelector('span').textContent = 'A sample week rendered by the real Studio pipeline in mock mode, so images are placeholders and the voice is silent. Approve, request changes and scheduling work here. Planning new reels, real images and voiceover, and posting need the app running on your computer with your OpenAI key.';
+		bar.querySelector('span').textContent = 'A sample week rendered by the real Studio pipeline in mock mode, so images are placeholders and the voice is silent. Watch & remake shows three of these reels watched back in, their patterns, and a remake. Approve, request changes and scheduling work here. Watching new links, planning, real images and voiceover, and posting need the app running on your computer with your OpenAI key.';
 		document.body.prepend(bar);
 	});
 })();

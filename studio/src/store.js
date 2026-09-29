@@ -1,4 +1,5 @@
-// Tiny JSON-file store: one db.json with brands and reels, written atomically and serially.
+// Tiny JSON-file store: one db.json with brands, reels, watched reels (sources) and pattern
+// profiles, written atomically and serially.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -10,6 +11,8 @@ export class Store {
 		this.mediaDir = path.join(dataDir, 'media');
 		fs.mkdirSync(this.mediaDir, { recursive: true });
 		this.data = fs.existsSync(this.file) ? JSON.parse(fs.readFileSync(this.file, 'utf8')) : { brands: [], reels: [] };
+		this.data.sources ??= [];
+		this.data.profiles ??= [];
 		this.writing = Promise.resolve();
 	}
 
@@ -52,6 +55,28 @@ export class Store {
 		return r;
 	}
 
+	sources() { return [...this.data.sources].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+	source(id) { return this.data.sources.find((s) => s.id === id); }
+	addSource(src) { this.data.sources.push(src); this.save(); return src; }
+	updateSource(id, patch) {
+		const s = this.source(id);
+		if (!s) return null;
+		Object.assign(s, patch, { updatedAt: new Date().toISOString() });
+		this.save();
+		return s;
+	}
+	removeSource(id) {
+		this.data.sources = this.data.sources.filter((s) => s.id !== id);
+		fs.rmSync(path.join(this.mediaDir, id), { recursive: true, force: true });
+		this.save();
+	}
+
+	profiles() { return [...this.data.profiles].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+	profile(id) { return this.data.profiles.find((p) => p.id === id); }
+	addProfile(p) { this.data.profiles.push(p); this.save(); return p; }
+	removeProfile(id) { this.data.profiles = this.data.profiles.filter((p) => p.id !== id); this.save(); }
+
+	// Media folder for a reel or a watched source.
 	reelDir(id) {
 		const d = path.join(this.mediaDir, id);
 		fs.mkdirSync(d, { recursive: true });
