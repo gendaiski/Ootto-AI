@@ -9,6 +9,10 @@ that could not be confirmed is marked on the page as assumed or illustrative.
 
 Landing page for an AI operator that runs an Instagram account.
 
+## Ootto Studio (working app)
+
+`studio/` is a working reel generator. OpenAI writes a week of reel scripts, makes the scene images and voiceover, ffmpeg renders vertical MP4s, you approve or request changes, and approved reels can post to Instagram on schedule. See `studio/README.md` to run it.
+
 ## Open it
 
 Open `prototype/index.html` in any browser. It is a single self-contained file; the only external
