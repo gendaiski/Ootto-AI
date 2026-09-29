@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ootto — AI operator for Instagram (concept draft)</title>
+<meta name="description" content="Concept prototype of the ootto.ai landing page: a 24/7 AI operator that grows an Instagram account, engages every follower and turns comments into qualified leads.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#F4F4EF;
+  --surface:#FFFFFF;
+  --surface-2:#ECECE5;
+  --ink:#101214;
+  --ink-2:#2B2F35;
+  --muted:#5D636C;
+  --line:#DCDBD3;
+  --line-strong:#C6C5BC;
+  --accent:#C8F53A;          /* the one bold accent: signal lime */
+  --accent-ink:#0F1A00;      /* text placed on the accent */
+  --accent-text:#4E7A00;     /* accent used as text on light bg */
+  --accent-soft:#EEF9C8;
+  --danger:#F4523F;
+  --danger-soft:#FDE4E0;
+  --phone:#0B0C0E;
+  --phone-ink:#F7F7F4;
+  --shadow:0 20px 50px rgba(16,18,20,.12);
+  --radius:18px;
+  --panel:#111316;           /* fixed dark panel: stays dark in both themes */
+  --panel-ink:#F3F3EE;
+  --panel-line:rgba(255,255,255,.08);
+  --font-display:"Bricolage Grotesque","Avenir Next","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --font-body:"Manrope","Avenir Next","Segoe UI",Helvetica,Arial,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E0F11; --surface:#17191C; --surface-2:#1F2226;
+    --ink:#F3F3EE; --ink-2:#D5D6D0; --muted:#9FA4AC;
+    --line:#2A2D32; --line-strong:#3A3E45;
+    --accent:#C8F53A; --accent-ink:#0F1A00; --accent-text:#D4FF57; --accent-soft:#233113;
+    --danger:#FF6A58; --danger-soft:#3A1F1B;
+    --phone:#050607; --phone-ink:#F7F7F4;
+    --shadow:0 20px 50px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E0F11; --surface:#17191C; --surface-2:#1F2226;
+  --ink:#F3F3EE; --ink-2:#D5D6D0; --muted:#9FA4AC;
+  --line:#2A2D32; --line-strong:#3A3E45;
+  --accent:#C8F53A; --accent-ink:#0F1A00; --accent-text:#D4FF57; --accent-soft:#233113;
+  --danger:#FF6A58; --danger-soft:#3A1F1B;
+  --phone:#050607; --phone-ink:#F7F7F4;
+  --shadow:0 20px 50px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+
+/* ---------- base ---------- */
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--font-body); font-size:16px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+img,svg{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+h1,h2,h3,h4{font-family:var(--font-display);margin:0;letter-spacing:-.02em;line-height:1.05}
+h1{font-size:clamp(2.4rem,5.6vw,4.6rem);font-weight:800;letter-spacing:-.035em}
+h2{font-size:clamp(1.85rem,3.6vw,2.9rem);font-weight:800}
+h3{font-size:1.2rem;font-weight:700;letter-spacing:-.01em}
+p{margin:0}
+.wrap{width:min(1180px,100% - 32px);margin-inline:auto}
+.section{padding:clamp(56px,8vw,112px) 0}
+.section + .section{border-top:1px solid var(--line)}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;font-size:.78rem;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text);margin-bottom:16px;
+}
+.eyebrow::before{content:"";width:22px;height:3px;background:var(--accent);border-radius:2px}
+.lede{color:var(--muted);font-size:1.08rem;max-width:56ch}
+.sec-head{max-width:720px;margin-bottom:clamp(28px,4vw,48px)}
+.sec-head .lede{margin-top:14px}
+.assumed{
+  display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+  border:1px dashed var(--line-strong);border-radius:999px;padding:3px 10px;
+}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* buttons */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px 20px;border-radius:999px;font-weight:700;font-size:.95rem;
+  border:1.5px solid transparent;transition:transform .15s ease,background .15s ease,border-color .15s ease;
+  white-space:nowrap;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn:focus-visible,a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn-accent{background:var(--accent);color:var(--accent-ink)}
+.btn-accent:hover{background:color-mix(in srgb,var(--accent) 88%,#fff)}
+.btn-ink{background:var(--ink);color:var(--bg)}
+.btn-ghost{border-color:var(--line-strong);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--ink)}
+.btn-lg{padding:15px 26px;font-size:1.02rem}
+
+/* ---------- concept banner ---------- */
+.concept{
+  background:var(--ink);color:var(--bg);font-size:.82rem;line-height:1.35;
+  display:flex;align-items:center;gap:12px;padding:8px 16px;
+}
+.concept .tag{background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:4px;flex:none}
+.concept p{flex:1;min-width:0}
+.concept button{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:1.2rem;line-height:1;color:var(--bg);opacity:.85}
+.concept button:hover{opacity:1;background:rgba(255,255,255,.14)}
+.concept[hidden]{display:none}
+
+/* ---------- header ---------- */
+.header{
+  position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 84%,transparent);
+  backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.header .wrap{display:flex;align-items:center;gap:24px;height:66px}
+.logo{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:800;font-size:1.45rem;letter-spacing:-.04em}
+.logo .mark{width:30px;height:30px}
+.nav{display:flex;align-items:center;gap:26px;margin-left:12px;font-weight:600;font-size:.94rem;color:var(--ink-2)}
+.nav a:hover{color:var(--ink)}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:18px;font-weight:600;font-size:.94rem}
+.header-actions .btn{padding:10px 18px}
+.burger{display:none;width:44px;height:44px;border-radius:12px;place-items:center;margin-left:auto}
+.burger:hover{background:var(--surface-2)}
+.mobile-menu{display:none;border-bottom:1px solid var(--line);background:var(--surface)}
+.mobile-menu ul{list-style:none;margin:0;padding:8px 16px 16px}
+.mobile-menu a{display:block;padding:12px 4px;font-weight:600;border-bottom:1px solid var(--line)}
+.mobile-menu li:last-child{padding-top:12px}
+.mobile-menu li:last-child a{border:0;padding:0}
+.mobile-menu li:last-child .btn{width:100%}
+.mobile-menu.open{display:block}
+@media (max-width:900px){
+  .nav,.header-actions{display:none}
+  .burger{display:grid}
+}
+
+/* ---------- hero ---------- */
+.hero{padding:clamp(48px,7vw,96px) 0 clamp(40px,6vw,80px);position:relative;overflow:hidden}
+.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(32px,5vw,72px);align-items:center}
+.hero h1{max-width:12ch}
+.hero h1 em{font-style:normal;background:var(--accent);color:var(--accent-ink);padding:0 .12em;border-radius:.12em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.hero .lede{margin-top:22px;font-size:1.12rem}
+.hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.hero-proof{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:30px;font-size:.88rem;font-weight:600;color:var(--muted)}
+.hero-proof span{display:inline-flex;align-items:center;gap:7px}
+.hero-proof svg{width:16px;height:16px;color:var(--accent-text)}
+.hero-visual{display:flex;flex-direction:column;align-items:center;gap:18px;position:relative}
+.hero-visual::before{
+  content:"";position:absolute;inset:auto -10% -12% -10%;height:60%;z-index:0;
+  background:radial-gradient(60% 70% at 50% 100%,color-mix(in srgb,var(--accent) 45%,transparent),transparent 70%);
+  pointer-events:none;
+}
+
+/* phone */
+.phone{
+  position:relative;z-index:1;width:300px;height:610px;background:var(--phone);border-radius:46px;
+  padding:12px;box-shadow:var(--shadow),0 0 0 1px rgba(255,255,255,.06) inset;color:var(--phone-ink);
+}
+.phone .screen{position:relative;height:100%;border-radius:36px;overflow:hidden;background:#111316;display:flex;flex-direction:column}
+.phone .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:96px;height:26px;border-radius:14px;background:var(--phone);z-index:5}
+.phone .topbar{display:flex;align-items:center;justify-content:space-between;padding:46px 18px 8px;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#B7BBC3}
+.phone .topbar b{color:#fff}
+.deck{position:relative;flex:1;margin:4px 14px 0}
+.reel{
+  position:absolute;inset:0;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;
+  justify-content:space-between;padding:16px;color:#fff;
+  box-shadow:0 12px 30px rgba(0,0,0,.45);
+  transition:transform .38s cubic-bezier(.2,.7,.2,1),opacity .3s ease;
+  will-change:transform;
+}
+.reel[data-pos="0"]{transform:translateY(0) scale(1);z-index:3}
+.reel[data-pos="1"]{transform:translateY(12px) scale(.955);z-index:2;filter:brightness(.8)}
+.reel[data-pos="2"]{transform:translateY(24px) scale(.91);z-index:1;filter:brightness(.6)}
+.reel.out-right{transform:translateX(130%) rotate(14deg);opacity:0}
+.reel.out-left{transform:translateX(-130%) rotate(-14deg);opacity:0}
+.reel .bg{position:absolute;inset:0;z-index:-1}
+.reel-1 .bg{background:linear-gradient(160deg,#1E2A16,#0B0F08 70%)}
+.reel-1 .bg::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg,transparent 0 18px,rgba(200,245,58,.16) 18px 20px)}
+.reel-2 .bg{background:linear-gradient(160deg,#2C1C16,#120A08 70%)}
+.reel-2 .bg::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.14),transparent 40%),radial-gradient(circle at 70% 80%,rgba(244,82,63,.35),transparent 45%)}
+.reel-3 .bg{background:linear-gradient(160deg,#151C2C,#080A12 70%)}
+.reel-3 .bg::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0 48%,rgba(255,255,255,.08) 48% 52%,transparent 52%),linear-gradient(0deg,transparent 0 48%,rgba(255,255,255,.08) 48% 52%,transparent 52%)}
+.reel .chip{display:inline-flex;align-items:center;gap:6px;font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,255,255,.14);backdrop-filter:blur(6px);padding:5px 9px;border-radius:999px;align-self:flex-start}
+.reel .chip i{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.reel .hook{font-family:var(--font-display);font-weight:800;font-size:1.55rem;line-height:1.02;letter-spacing:-.03em;margin:auto 0 12px}
+.reel .cap{font-size:.74rem;color:rgba(255,255,255,.78);line-height:1.4}
+.reel .meta{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:.68rem;font-weight:700;color:rgba(255,255,255,.7)}
+.reel .meta span{display:inline-flex;align-items:center;gap:5px}
+.reel .meta svg{width:13px;height:13px}
+.reel .stamp{
+  position:absolute;top:22px;font-family:var(--font-display);font-weight:800;font-size:1.1rem;letter-spacing:.06em;
+  padding:6px 12px;border:3px solid;border-radius:8px;opacity:0;transform:rotate(-14deg);transition:opacity .2s;
+}
+.reel .stamp.yes{right:16px;color:var(--accent);border-color:var(--accent)}
+.reel .stamp.no{left:16px;color:var(--danger);border-color:var(--danger);transform:rotate(14deg)}
+.reel.out-right .stamp.yes,.reel.out-left .stamp.no{opacity:1}
+.deck-done{
+  position:absolute;inset:0;border-radius:22px;background:#1A1D21;display:none;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;padding:24px;gap:10px;border:1px dashed #3A3F47;
+}
+.deck-done svg{width:40px;height:40px;color:var(--accent)}
+.deck-done b{font-family:var(--font-display);font-size:1.15rem}
+.deck-done p{font-size:.8rem;color:#A5AAB3}
+.deck-done button{margin-top:6px;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:8px 16px;font-weight:700;font-size:.82rem}
+.deck.empty .deck-done{display:flex}
+.swipe{display:flex;align-items:center;justify-content:center;gap:18px;padding:16px 14px 18px}
+.swipe button{
+  width:58px;height:58px;border-radius:50%;display:grid;place-items:center;border:2px solid;
+  transition:transform .15s ease,background .15s ease;
+}
+.swipe button svg{width:24px;height:24px}
+.swipe button:hover{transform:scale(1.06)}
+.swipe .no{color:var(--danger);border-color:var(--danger);background:rgba(244,82,63,.12)}
+.swipe .yes{color:var(--accent-ink);border-color:var(--accent);background:var(--accent);width:66px;height:66px}
+.swipe .yes svg{width:28px;height:28px}
+.swipe-labels{display:flex;justify-content:space-between;padding:0 24px 14px;font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8A8F98}
+.swipe-labels span:last-child{color:var(--accent)}
+.status{position:relative;z-index:1;min-height:44px;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:.86rem;font-weight:600;box-shadow:var(--shadow)}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.status.bad i{background:var(--danger)}
+.status span{min-width:0}
+.hint{position:relative;z-index:1;font-size:.8rem;color:var(--muted)}
+kbd{font-family:inherit;font-size:.72rem;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--surface)}
+@media (max-width:900px){
+  .hero .wrap{grid-template-columns:1fr}
+  .hero h1{max-width:none}
+}
+@media (max-width:420px){
+  .phone{width:min(300px,100%);height:600px}
+}
+
+/* ---------- how it works ---------- */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+.step .n{font-family:var(--font-display);font-weight:800;font-size:.85rem;color:var(--accent-ink);background:var(--accent);width:30px;height:30px;border-radius:9px;display:grid;place-items:center;margin-bottom:16px}
+.step h3{margin-bottom:8px}
+.step p{color:var(--muted);font-size:.95rem}
+.onboard{
+  margin-top:40px;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:clamp(20px,3vw,36px);
+  display:grid;grid-template-columns:1fr 1.25fr;gap:clamp(24px,4vw,48px);align-items:center;
+}
+.url-form{display:flex;gap:8px;margin-top:18px;background:var(--bg);border:1.5px solid var(--line-strong);border-radius:14px;padding:6px 6px 6px 14px;align-items:center}
+.url-form:focus-within{border-color:var(--ink)}
+.url-form svg{width:18px;height:18px;color:var(--muted);flex:none}
+.url-form input{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--ink);padding:8px 0}
+.url-form input:focus{outline:none}
+.url-form .btn{padding:10px 16px;font-size:.88rem}
+.learn{display:grid;gap:12px}
+.learn-card{display:grid;grid-template-columns:44px 1fr;gap:14px;align-items:start;background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:16px}
+.learn-card .ic{width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent-text);display:grid;place-items:center}
+.learn-card .ic svg{width:22px;height:22px}
+.learn-card h4{font-size:1rem;margin-bottom:4px}
+.learn-card p{font-size:.9rem;color:var(--muted)}
+.learn-card p b{color:var(--ink);font-weight:600}
+@media (max-width:900px){ .steps{grid-template-columns:1fr} .onboard{grid-template-columns:minmax(0,1fr)} }
+.onboard>*,.leads>*,.oss>*,.price-grid>*,.hero .wrap>*{min-width:0}
+@media (max-width:480px){ .url-form{flex-wrap:wrap;padding:8px} .url-form input{flex:1 1 60%} .url-form .btn{flex:1 1 100%} }
+
+/* ---------- calendar ---------- */
+.cal-head{display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.8rem;font-weight:600;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-top:28px}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.day .d{font-size:.74rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+.day .d b{color:var(--ink);font-family:var(--font-display);font-size:1rem;letter-spacing:0}
+.thumb{aspect-ratio:9/14;border-radius:10px;position:relative;overflow:hidden;color:#fff;padding:9px;display:flex;flex-direction:column;justify-content:flex-end;font-family:var(--font-display);font-weight:700;font-size:.78rem;line-height:1.1;letter-spacing:-.01em}
+.thumb::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.55))}
+.thumb span{position:relative}
+.thumb .t{position:absolute;top:7px;right:7px;font-size:.6rem;background:rgba(0,0,0,.5);padding:2px 5px;border-radius:4px;font-family:var(--font-body)}
+.t1{background:linear-gradient(160deg,#243318,#0F1509)}.t2{background:linear-gradient(160deg,#3A2418,#170D09)}.t3{background:linear-gradient(160deg,#1B2540,#0A0E1C)}
+.t4{background:linear-gradient(160deg,#3A3120,#17130A)}.t5{background:linear-gradient(160deg,#20353A,#0A1618)}.t6{background:linear-gradient(160deg,#35203A,#150A18)}.t7{background:linear-gradient(160deg,#2A2A2A,#0C0C0C)}
+.st{font-size:.72rem;font-weight:700;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 9px;align-self:flex-start;white-space:nowrap}
+.st i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.st-posted{background:var(--surface-2);color:var(--ink-2)}
+.st-sched{background:var(--accent-soft);color:var(--accent-text)}
+.st-review{background:var(--danger-soft);color:var(--danger)}
+.day.today{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+@media (max-width:900px){
+  .cal{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px;margin-inline:-16px;padding-inline:16px;scrollbar-width:thin}
+  .day{flex:0 0 150px;scroll-snap-align:start}
+}
+
+/* ---------- comments → leads ---------- */
+.leads{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(20px,3vw,40px);align-items:start;margin-top:8px}
+.thread{background:var(--surface);border:1px solid var(--line);border-radius:24px;overflow:hidden}
+.thread-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);font-size:.86rem;font-weight:700}
+.thread-head .av{width:34px;height:34px;border-radius:50%;background:var(--t1,linear-gradient(140deg,#243318,#C8F53A))}
+.thread-head small{display:block;color:var(--muted);font-weight:500}
+.thread-head .live{margin-left:auto;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text);display:inline-flex;align-items:center;gap:6px}
+.thread-head .live i{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.msgs{padding:16px 18px;display:grid;gap:12px}
+.msg{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start;max-width:92%}
+.msg .av{width:30px;height:30px;border-radius:50%;background:var(--surface-2);border:1px solid var(--line)}
+.msg .av.o{background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);border:0}
+.msg .av.o svg{width:16px;height:16px}
+.msg .b{background:var(--surface-2);border-radius:14px;padding:9px 13px;font-size:.9rem}
+.msg .b small{display:block;font-size:.7rem;font-weight:700;color:var(--muted);margin-bottom:3px;letter-spacing:.02em}
+.msg.o{justify-self:end;grid-template-columns:1fr 30px}
+.msg.o .b{background:var(--ink);color:var(--bg);order:-1}
+.msg.o .b small{color:color-mix(in srgb,var(--bg) 70%,transparent)}
+.msg.dm .b{border:1.5px dashed var(--accent);background:transparent;color:var(--ink)}
+.msg.dm .b small{color:var(--accent-text)}
+.divider{text-align:center;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+.lead{background:var(--panel);color:var(--panel-ink);border:1px solid var(--panel-line);border-radius:24px;padding:24px;position:relative;overflow:hidden}
+.lead::after{content:"";position:absolute;width:220px;height:220px;right:-80px;top:-90px;border-radius:50%;background:var(--accent);opacity:.18;pointer-events:none}
+.lead .tag{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:var(--accent-ink);font-size:.7rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:6px}
+.lead h3{font-size:1.5rem;margin:14px 0 2px}
+.lead .h{font-size:.9rem;opacity:.7}
+.lead dl{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;margin:20px 0 0;padding:18px 0 0;border-top:1px solid rgba(255,255,255,.14)}
+.lead dt{font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.6}
+.lead dd{margin:3px 0 0;font-weight:600;font-size:.95rem}
+.score{display:flex;align-items:center;gap:10px}
+.score .bar{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden}
+.score .bar i{display:block;height:100%;width:86%;background:var(--accent);border-radius:3px}
+.lead .actions{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.lead .actions .btn{padding:10px 16px;font-size:.86rem}
+.lead .btn-ghost{border-color:rgba(255,255,255,.3);color:var(--panel-ink)}
+.lead-note{margin-top:16px;font-size:.86rem;color:var(--muted)}
+@media (max-width:900px){ .leads{grid-template-columns:1fr} }
+
+/* ---------- autopilot ---------- */
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px;display:flex;flex-direction:column;gap:14px;min-height:100%}
+.feat .ic{width:48px;height:48px;border-radius:14px;background:var(--ink);color:var(--accent);display:grid;place-items:center}
+.feat .ic svg{width:24px;height:24px}
+.feat p{color:var(--muted);font-size:.95rem}
+.feat ul{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:7px;font-size:.88rem;font-weight:600}
+.feat li{display:flex;gap:8px;align-items:flex-start}
+.feat li svg{width:16px;height:16px;flex:none;color:var(--accent-text);margin-top:3px}
+.connect{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.82rem;color:var(--muted);font-weight:600}
+.connect span{border:1px solid var(--line-strong);border-radius:999px;padding:5px 11px;background:var(--surface);color:var(--ink-2)}
+@media (max-width:900px){ .trio{grid-template-columns:1fr} }
+
+/* ---------- open source ---------- */
+.oss{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,56px);align-items:center}
+.repos{display:grid;gap:14px}
+.repo{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;transition:border-color .15s ease,transform .15s ease}
+.repo:hover{border-color:var(--ink);transform:translateY(-2px)}
+.repo .gh{width:40px;height:40px;border-radius:12px;background:var(--ink);color:var(--bg);display:grid;place-items:center}
+.repo .gh svg{width:22px;height:22px}
+.repo b{font-family:var(--font-display);font-size:1.05rem;display:block;letter-spacing:-.01em}
+.repo b span{color:var(--muted);font-weight:500}
+.repo p{font-size:.88rem;color:var(--muted);margin-top:3px}
+.repo .arrow{width:20px;height:20px;color:var(--muted)}
+.repo:hover .arrow{color:var(--ink)}
+.claude-box{margin-top:14px;display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:14px;background:var(--accent-soft);color:var(--ink);font-size:.9rem}
+.claude-box svg{width:20px;height:20px;flex:none;color:var(--accent-text);margin-top:2px}
+@media (max-width:900px){ .oss{grid-template-columns:1fr} .repo{grid-template-columns:auto 1fr} .repo .arrow{display:none} }
+
+/* ---------- pricing ---------- */
+.pricing{background:var(--surface)}
+.price-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:clamp(24px,4vw,56px);align-items:center}
+.price-card{background:var(--panel);color:var(--panel-ink);border:1px solid var(--panel-line);border-radius:28px;padding:clamp(24px,3vw,36px);position:relative;overflow:hidden}
+.price-card::before{content:"";position:absolute;inset:-40% -30% auto auto;width:60%;aspect-ratio:1;border-radius:50%;background:var(--accent);opacity:.16}
+.price-card .plan{font-size:.74rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.price-card .plan .assumed{border-color:rgba(255,255,255,.3);color:rgba(255,255,255,.7)}
+.price-big{display:flex;align-items:baseline;gap:10px;margin-top:22px;font-family:var(--font-display);letter-spacing:-.04em}
+.price-big .v{font-size:clamp(3.6rem,7vw,5.4rem);font-weight:800;line-height:1}
+.price-big .s{font-size:1rem;font-weight:600;opacity:.75;font-family:var(--font-body);letter-spacing:0}
+.price-then{margin-top:6px;font-size:1.05rem;font-weight:600}
+.price-then b{color:var(--accent)}
+.price-card ul{list-style:none;margin:24px 0 0;padding:22px 0 0;border-top:1px solid rgba(255,255,255,.14);display:grid;gap:10px;font-size:.93rem;font-weight:500}
+.price-card li{display:flex;gap:10px;align-items:flex-start}
+.price-card li svg{width:18px;height:18px;flex:none;color:var(--accent);margin-top:2px}
+.price-card .btn{margin-top:26px;width:100%}
+.price-card .fine{margin-top:12px;font-size:.8rem;opacity:.7;text-align:center}
+.price-copy .lede{margin-top:14px}
+.price-points{margin:26px 0 0;padding:0;list-style:none;display:grid;gap:14px}
+.price-points li{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:start}
+.price-points .ic{width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent-text);display:grid;place-items:center}
+.price-points .ic svg{width:18px;height:18px}
+.price-points b{display:block}
+.price-points p{color:var(--muted);font-size:.92rem}
+@media (max-width:900px){ .price-grid{grid-template-columns:1fr} .price-card{order:-1} }
+
+/* ---------- faq ---------- */
+.faq{max-width:780px}
+.faq details{border-top:1px solid var(--line)}
+.faq details:last-child{border-bottom:1px solid var(--line)}
+.faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:20px 4px;font-family:var(--font-display);font-weight:700;font-size:1.1rem;letter-spacing:-.01em}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary svg{width:22px;height:22px;flex:none;transition:transform .2s ease;color:var(--muted)}
+.faq details[open] summary svg{transform:rotate(45deg);color:var(--accent-text)}
+.faq .a{padding:0 4px 22px;color:var(--muted);max-width:62ch}
+
+/* ---------- final cta + footer ---------- */
+.final{background:var(--accent);color:var(--accent-ink);padding:clamp(56px,8vw,96px) 0;text-align:center}
+.final h2{font-size:clamp(2rem,4.5vw,3.6rem);max-width:18ch;margin:0 auto}
+.final p{margin:16px auto 0;max-width:48ch;font-size:1.05rem;color:color-mix(in srgb,var(--accent-ink) 78%,transparent)}
+.final .btn{margin-top:28px;background:var(--accent-ink);color:var(--accent)}
+.footer{background:var(--panel);color:var(--panel-ink);border-top:1px solid var(--panel-line);padding:48px 0 32px}
+.footer .grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px}
+.footer h4{font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-bottom:14px;font-family:var(--font-body)}
+.footer ul{list-style:none;margin:0;padding:0;display:grid;gap:9px;font-size:.92rem}
+.footer a:hover{color:var(--accent)}
+.footer .logo{color:var(--panel-ink)}
+.footer .blurb{margin-top:12px;font-size:.9rem;opacity:.65;max-width:34ch}
+.footer .bottom{margin-top:40px;padding-top:20px;border-top:1px solid rgba(255,255,255,.14);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:.8rem;opacity:.6}
+@media (max-width:900px){ .footer .grid{grid-template-columns:1fr 1fr} }
+@media (max-width:520px){ .footer .grid{grid-template-columns:1fr} }
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
+  .btn:hover,.repo:hover,.swipe button:hover{transform:none}
+}
+</style>
+</head>
+<body>
+
+<!-- concept banner -->
+<div class="concept" id="concept" role="note">
+  <span class="tag">Concept</span>
+  <p>Concept draft — ootto.ai is blocked from this environment, so this page is an informed guess, not a clone. It will be rebuilt from the real site once access is granted.</p>
+  <button type="button" id="concept-close" aria-label="Dismiss concept notice">&times;</button>
+</div>
+
+<!-- header -->
+<header class="header">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Ootto home">
+      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--ink)"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--accent)" stroke-width="3.2"/><circle cx="24.5" cy="8" r="2.4" fill="var(--accent)"/></svg>
+      ootto
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#reels">Reels</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#opensource">Open source</a>
+    </nav>
+    <div class="header-actions">
+      <a href="#login">Log in</a>
+      <a class="btn btn-accent" href="#pricing">Start for $1</a>
+    </div>
+    <button class="burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu" id="burger">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="l1" d="M4 7h16"/><path class="l2" d="M4 12h16"/><path class="l3" d="M4 17h16"/></svg>
+    </button>
+  </div>
+  <div class="mobile-menu" id="mobile-menu">
+    <ul>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#reels">Reels</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#opensource">Open source</a></li>
+      <li><a href="#login">Log in</a></li>
+      <li><a class="btn btn-accent" href="#pricing">Start for $1</a></li>
+    </ul>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- hero -->
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">24/7 AI operator for Instagram</div>
+      <h1>The most proficient <em>AI operator</em> for Instagram.</h1>
+      <p class="lede">Ootto runs your account around the clock: it grows your following, engages every follower and turns comments into qualified leads — while you approve reels with a swipe.</p>
+      <div class="hero-cta">
+        <a class="btn btn-accent btn-lg" href="#pricing">Start for $1</a>
+        <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
+      </div>
+      <div class="hero-proof">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Up to 7 reels a week</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Every comment answered</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Then $48/month, cancel anytime</span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="phone" aria-label="Reel review demo">
+        <div class="screen">
+          <div class="notch" aria-hidden="true"></div>
+          <div class="topbar"><span>Review queue</span><b id="deck-count">3 to review</b></div>
+          <div class="deck" id="deck">
+            <article class="reel reel-1" data-pos="0" tabindex="-1">
+              <div class="bg" aria-hidden="true"></div>
+              <span class="chip"><i></i>Drafted from /pricing</span>
+              <div class="hook">3 mistakes that kill your DM replies</div>
+              <p class="cap">Hook → 3 quick cuts → CTA to comment "DM" for the template.</p>
+              <div class="meta"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>0:24</span><span>Tue 9:00 slot</span></div>
+              <span class="stamp yes" aria-hidden="true">APPROVED</span><span class="stamp no" aria-hidden="true">CHANGES</span>
+            </article>
+            <article class="reel reel-2" data-pos="1" tabindex="-1">
+              <div class="bg" aria-hidden="true"></div>
+              <span class="chip"><i></i>Drafted from /about</span>
+              <div class="hook">Why we ship every order in 24h</div>
+              <p class="cap">Founder voice-over, b-roll of the packing table, on-screen captions.</p>
+              <div class="meta"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>0:31</span><span>Thu 12:30 slot</span></div>
+              <span class="stamp yes" aria-hidden="true">APPROVED</span><span class="stamp no" aria-hidden="true">CHANGES</span>
+            </article>
+            <article class="reel reel-3" data-pos="2" tabindex="-1">
+              <div class="bg" aria-hidden="true"></div>
+              <span class="chip"><i></i>Trending format</span>
+              <div class="hook">POV: your inbox answers itself</div>
+              <p class="cap">Screen-recorded reply demo, trending audio, ends on the lead form.</p>
+              <div class="meta"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>0:18</span><span>Sat 18:00 slot</span></div>
+              <span class="stamp yes" aria-hidden="true">APPROVED</span><span class="stamp no" aria-hidden="true">CHANGES</span>
+            </article>
+            <div class="deck-done">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 5-5"/></svg>
+              <b>All caught up</b>
+              <p id="deck-summary">Approved reels are on the schedule. Ootto will redraft the rest.</p>
+              <button type="button" id="deck-reset">Load next batch</button>
+            </div>
+          </div>
+          <div class="swipe">
+            <button type="button" class="no" id="swipe-left" aria-label="Swipe left: request changes">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+            <button type="button" class="yes" id="swipe-right" aria-label="Swipe right: approve reel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+          </div>
+          <div class="swipe-labels" aria-hidden="true"><span>&larr; Request changes</span><span>Approve &rarr;</span></div>
+        </div>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite"><i></i><span>Swipe right to approve, left to request changes.</span></div>
+      <p class="hint">Try it: click the buttons or use <kbd>&larr;</kbd> <kbd>&rarr;</kbd> keys.</p>
+    </div>
+  </div>
+</section>
+
+<!-- how it works / onboarding -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">How it works</div>
+      <h2>Give Ootto your website. That's the whole setup.</h2>
+      <p class="lede">No brand deck, no content calendar, no prompt engineering. Ootto reads your site and starts operating.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3>Paste your URL</h3><p>Ootto crawls your site and learns your offer, tone and audience in minutes.</p></div>
+      <div class="step"><div class="n">2</div><h3>Swipe through reels</h3><p>Up to 7 reels a week land in your queue. Right to approve, left to request changes.</p></div>
+      <div class="step"><div class="n">3</div><h3>It posts and replies</h3><p>Approved reels go out on schedule, every comment gets a reply, and hot ones become leads.</p></div>
+    </div>
+
+    <div class="onboard">
+      <div>
+        <h3 style="font-size:1.45rem">Start with one link</h3>
+        <p class="lede" style="margin-top:8px;font-size:1rem">Type a website and see what Ootto pulls out before it drafts a single reel.</p>
+        <form class="url-form" id="url-form">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <label class="sr" for="url">Your website</label>
+          <input id="url" type="text" inputmode="url" placeholder="yourbrand.com" autocomplete="off">
+          <button class="btn btn-ink" type="submit">Learn my business</button>
+        </form>
+        <p class="hint" style="margin-top:12px">Demo only — nothing is fetched. The cards update with your domain.</p>
+      </div>
+      <div class="learn" id="learn">
+        <div class="learn-card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></div>
+          <div><h4>Your business</h4><p>What <b class="dom">yourbrand.com</b> sells, how it's priced, and the proof points worth repeating on camera.</p></div>
+        </div>
+        <div class="learn-card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4.5-6.2"/></svg></div>
+          <div><h4>Your audience</h4><p>Who buys from <b class="dom">yourbrand.com</b>, the questions they ask, and the words they use to ask them.</p></div>
+        </div>
+        <div class="learn-card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></div>
+          <div><h4>What works for similar brands</h4><p>Reel formats, hooks and posting times that are already winning in your category.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- reels calendar -->
+<section class="section" id="reels">
+  <div class="wrap">
+    <div class="cal-head">
+      <div class="sec-head" style="margin-bottom:0">
+        <div class="eyebrow">Reels</div>
+        <h2>Up to 7 reels a week, posted on schedule.</h2>
+        <p class="lede">Every approved reel is slotted into the best time for your audience. Anything you swiped left comes back redrafted.</p>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="background:var(--line-strong)"></i>Posted</span>
+        <span><i style="background:var(--accent)"></i>Scheduled</span>
+        <span><i style="background:var(--danger)"></i>Awaiting review</span>
+      </div>
+    </div>
+    <div class="cal">
+      <div class="day"><div class="d">Mon <b>22</b></div><div class="thumb t1"><span class="t">0:22</span><span>Our 3 non‑negotiables</span></div><span class="st st-posted"><i></i>Posted · 9:00</span></div>
+      <div class="day"><div class="d">Tue <b>23</b></div><div class="thumb t2"><span class="t">0:24</span><span>3 DM mistakes</span></div><span class="st st-posted"><i></i>Posted · 9:00</span></div>
+      <div class="day today"><div class="d">Wed <b>24</b></div><div class="thumb t3"><span class="t">0:19</span><span>Behind the counter</span></div><span class="st st-sched"><i></i>Today · 12:30</span></div>
+      <div class="day"><div class="d">Thu <b>25</b></div><div class="thumb t4"><span class="t">0:31</span><span>Shipped in 24h</span></div><span class="st st-sched"><i></i>Scheduled</span></div>
+      <div class="day"><div class="d">Fri <b>26</b></div><div class="thumb t5"><span class="t">0:27</span><span>Customer story: Maya</span></div><span class="st st-sched"><i></i>Scheduled</span></div>
+      <div class="day"><div class="d">Sat <b>27</b></div><div class="thumb t6"><span class="t">0:18</span><span>POV: inbox answers itself</span></div><span class="st st-review"><i></i>Review</span></div>
+      <div class="day"><div class="d">Sun <b>28</b></div><div class="thumb t7"><span class="t">0:20</span><span>Week in 20 seconds</span></div><span class="st st-review"><i></i>Review</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- comments → leads -->
+<section class="section" id="leads">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Engagement</div>
+      <h2>Every comment becomes a conversation. The right ones become leads.</h2>
+      <p class="lede">Ootto replies to every comment in your voice, moves buyers into DMs, qualifies them, and hands you a lead card — not a notification.</p>
+    </div>
+    <div class="leads">
+      <div class="thread" aria-label="Example comment thread">
+        <div class="thread-head">
+          <div class="av" aria-hidden="true"></div>
+          <div>Reel · 3 DM mistakes<small>142 comments · Ootto replied to all</small></div>
+          <span class="live"><i></i>Live</span>
+        </div>
+        <div class="msgs">
+          <div class="msg"><div class="av" aria-hidden="true"></div><div class="b"><small>@maya.runs</small>ok but do you do this for small shops too? we're 2 people</div></div>
+          <div class="msg o"><div class="b"><small>ootto · in your voice</small>Two‑person teams are most of our customers, Maya. Want the template we use? Say "DM" and I'll send it over.</div><div class="av o" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><circle cx="12" cy="12" r="6"/></svg></div></div>
+          <div class="msg"><div class="av" aria-hidden="true"></div><div class="b"><small>@maya.runs</small>DM 🙌</div></div>
+          <div class="divider">moved to DMs</div>
+          <div class="msg o dm"><div class="b"><small>ootto · direct message</small>Here's the template. Quick one: are you replying to comments manually today, and roughly how many a week?</div><div class="av o" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><circle cx="12" cy="12" r="6"/></svg></div></div>
+          <div class="msg"><div class="av" aria-hidden="true"></div><div class="b"><small>@maya.runs</small>manually, maybe 300? it's killing us. can we talk this week?</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="lead" aria-label="Example lead card">
+          <span class="tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>Qualified lead</span>
+          <h3>Maya Ortega</h3>
+          <p class="h">@maya.runs · 2‑person running store</p>
+          <dl>
+            <div><dt>Intent</dt><dd class="score"><span class="bar"><i></i></span>86</dd></div>
+            <div><dt>Source</dt><dd>Reel · 3 DM mistakes</dd></div>
+            <div><dt>Pain</dt><dd>~300 manual replies/week</dd></div>
+            <div><dt>Ask</dt><dd>Call this week</dd></div>
+          </dl>
+          <div class="actions">
+            <a class="btn btn-accent" href="#pricing">Book the call</a>
+            <a class="btn btn-ghost" href="#leads">Open in CRM</a>
+          </div>
+        </div>
+        <p class="lead-note">Lead cards land wherever you work: email, Slack, your CRM, or the Ootto dashboard. <span class="assumed">Destinations assumed</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- autopilot -->
+<section class="section" id="autopilot">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">AI autopilot</div>
+      <h2>Autopilot for the rest of the business.</h2>
+      <p class="lede">Connect your tools once. Ootto keeps the boring parts moving so the leads it creates actually turn into revenue.</p>
+    </div>
+    <div class="trio">
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></div>
+        <h3>Invoicing</h3>
+        <p>Closed a deal in the DMs? The invoice is drafted, sent and chased without you opening a spreadsheet.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Drafts from the conversation</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Polite reminders on a schedule</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12.5h5"/></svg></div>
+        <h3>Lead follow-up</h3>
+        <p>Nobody goes cold. Ootto follows up in your voice, at the right cadence, and stops the moment they reply.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>DM, email or SMS</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Books straight into your calendar</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></div>
+        <h3>Reporting</h3>
+        <p>A plain-language weekly report: what posted, what grew, which comments became leads, and what Ootto will try next.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Followers, reach, replies, leads</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Delivered every Monday</li>
+        </ul>
+      </div>
+    </div>
+    <div class="connect">Connects to <span>Instagram</span><span>Google Calendar</span><span>Stripe</span><span>Slack</span><span>HubSpot</span><span>Gmail</span><span class="assumed" style="border-style:dashed">Integrations assumed</span></div>
+  </div>
+</section>
+
+<!-- open source -->
+<section class="section" id="opensource">
+  <div class="wrap">
+    <div class="oss">
+      <div>
+        <div class="eyebrow">Open source</div>
+        <h2>Works inside your own Claude.</h2>
+        <p class="lede" style="margin-top:14px">Every Ootto tool also ships as a free, open-source Claude skill. Install them from GitHub, run them in your own Claude, and upgrade to the full operator when you want it running 24/7 without you.</p>
+        <div class="claude-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>
+          <div><b>Free forever, MIT-style.</b> Skills are plain files you can read, fork and run. No account needed. <span class="assumed">License assumed</span></div>
+        </div>
+      </div>
+      <div class="repos">
+        <a class="repo" href="https://github.com/Ootto-AI/ootto-watch" target="_blank" rel="noopener">
+          <span class="gh" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.57 2.34 1.12 2.91.85.09-.66.35-1.12.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.24 10.24 0 0 0 22 12.23C22 6.58 17.52 2 12 2z"/></svg></span>
+          <span><b>Ootto-AI / <span>ootto-watch</span></b><p>Watch an Instagram account from Claude: new comments, mentions and DMs surfaced with suggested replies. <em class="assumed">Description assumed</em></p></span>
+          <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </a>
+        <a class="repo" href="https://github.com/Ootto-AI/claude-invoice-skills" target="_blank" rel="noopener">
+          <span class="gh" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.57 2.34 1.12 2.91.85.09-.66.35-1.12.63-1.37-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.95c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.24 10.24 0 0 0 22 12.23C22 6.58 17.52 2 12 2z"/></svg></span>
+          <span><b>Ootto-AI / <span>claude-invoice-skills</span></b><p>Draft, send and chase invoices from a conversation inside Claude. <em class="assumed">Description assumed</em></p></span>
+          <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- pricing -->
+<section class="section pricing" id="pricing">
+  <div class="wrap">
+    <div class="price-grid">
+      <div class="price-copy">
+        <div class="eyebrow">Pricing</div>
+        <h2>One dollar to start. One plan after that.</h2>
+        <p class="lede">Try the full operator for $1 today. If it earns its keep, it's $48 a month. If it doesn't, cancel and keep the reels it made.</p>
+        <ul class="price-points">
+          <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div><b>Live in minutes</b><p>Paste your URL, connect Instagram, approve your first reel.</p></div></li>
+          <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span><div><b>You stay in control</b><p>Nothing posts without a swipe right. Nothing is sent you haven't seen the tone of.</p></div></li>
+          <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M14 6l6 6-6 6"/></svg></span><div><b>Cancel anytime</b><p>One click from the dashboard. No calls, no retention flow.</p></div></li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <div class="plan"><span>Full service</span><span class="assumed">Inclusions assumed</span></div>
+        <div class="price-big"><span class="v">$1</span><span class="s">today</span></div>
+        <p class="price-then">then <b>$48 / month</b></p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Up to 7 reels a week, drafted from your site</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Swipe-to-approve queue and scheduled posting</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>24/7 replies to every comment and DM</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Lead qualification and lead cards</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Autopilot: invoicing, follow-up, weekly report</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>All open-source skills, free forever</li>
+        </ul>
+        <a class="btn btn-accent btn-lg" href="#pricing">Start for $1</a>
+        <p class="fine">$1 today, then $48/month. Cancel anytime.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- faq -->
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions people ask before the first swipe.</h2>
+    </div>
+    <div class="faq">
+      <details open>
+        <summary>Does Ootto post without my approval?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="a">No. Every reel waits in your queue until you swipe right. Swipe left and Ootto redrafts it with your note. Replies to comments run continuously in the voice it learned from your site, and you can tighten that voice at any time.</div>
+      </details>
+      <details>
+        <summary>What does "up to 7 reels a week" actually mean?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="a">Ootto drafts one reel per day at most. You choose how many to approve; approved reels are scheduled into the slots that perform best for your audience.</div>
+      </details>
+      <details>
+        <summary>How does a comment become a lead?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="a">Ootto answers every comment. When someone shows buying intent, it moves the conversation into DMs, asks a couple of qualifying questions, and creates a lead card with what it learned. You only see the ones worth your time.</div>
+      </details>
+      <details>
+        <summary>What happens after the $1 trial?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="a">You pay $1 today and the full service continues at $48 a month. Cancel anytime from the dashboard. <span class="assumed">Trial length assumed</span></div>
+      </details>
+      <details>
+        <summary>Do I need Ootto if I already use Claude?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+        <div class="a">Every Ootto tool also works inside your own Claude as a free open-source skill. The paid operator is for people who want it running 24/7, connected to Instagram and their tools, without driving it themselves.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- final cta -->
+<section class="final">
+  <div class="wrap">
+    <h2>Put an operator on your Instagram tonight.</h2>
+    <p>$1 today, then $48 a month. Your first reel is waiting for a swipe by tomorrow morning.</p>
+    <a class="btn btn-lg" href="#pricing">Start for $1</a>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer" id="login">
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <a class="logo" href="#top"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--accent-ink)" stroke-width="3.2"/><circle cx="24.5" cy="8" r="2.4" fill="var(--accent-ink)"/></svg>ootto</a>
+        <p class="blurb">The most proficient AI operator for Instagram. Grows the account, answers every follower, turns comments into leads.</p>
+      </div>
+      <div><h4>Product</h4><ul><li><a href="#how">How it works</a></li><li><a href="#reels">Reels</a></li><li><a href="#leads">Leads</a></li><li><a href="#pricing">Pricing</a></li></ul></div>
+      <div><h4>Open source</h4><ul><li><a href="https://github.com/Ootto-AI/ootto-watch" target="_blank" rel="noopener">ootto-watch</a></li><li><a href="https://github.com/Ootto-AI/claude-invoice-skills" target="_blank" rel="noopener">claude-invoice-skills</a></li><li><a href="https://github.com/Ootto-AI" target="_blank" rel="noopener">GitHub org</a></li></ul></div>
+      <div><h4>Account</h4><ul><li><a href="#login">Log in</a></li><li><a href="#pricing">Start for $1</a></li><li><a href="#faq">FAQ</a></li></ul></div>
+    </div>
+    <div class="bottom">
+      <span>&copy; 2026 Ootto. Concept draft, not affiliated with the live site.</span>
+      <span>Privacy · Terms · Contact</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* concept banner */
+  var concept = document.getElementById('concept');
+  document.getElementById('concept-close').addEventListener('click', function(){ concept.hidden = true; });
+
+  /* mobile menu */
+  var burger = document.getElementById('burger'), menu = document.getElementById('mobile-menu');
+  burger.addEventListener('click', function(){
+    var open = menu.classList.toggle('open');
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    burger.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  });
+  menu.addEventListener('click', function(e){ if (e.target.closest('a')) { menu.classList.remove('open'); burger.setAttribute('aria-expanded','false'); } });
+
+  /* swipe demo */
+  var deck = document.getElementById('deck');
+  var status = document.getElementById('status');
+  var count = document.getElementById('deck-count');
+  var summary = document.getElementById('deck-summary');
+  var reels = Array.prototype.slice.call(deck.querySelectorAll('.reel'));
+  var slots = ['Tue 9:00','Thu 12:30','Sat 18:00'];
+  var queue, approved, changed, busy = false;
+
+  function reset(){
+    queue = reels.slice(); approved = 0; changed = 0;
+    deck.classList.remove('empty');
+    reels.forEach(function(r,i){ r.classList.remove('out-left','out-right'); r.setAttribute('data-pos', String(i)); r.style.display=''; });
+    count.textContent = '3 to review';
+    setStatus('Swipe right to approve, left to request changes.', false);
+  }
+  function setStatus(text, bad){
+    status.className = 'status' + (bad ? ' bad' : '');
+    status.querySelector('span').textContent = text;
+  }
+  function relayer(){
+    queue.forEach(function(r,i){ r.setAttribute('data-pos', String(i)); });
+    var n = queue.length;
+    count.textContent = n ? n + ' to review' : 'Queue empty';
+    if (!n){
+      deck.classList.add('empty');
+      summary.textContent = approved + ' approved and scheduled' + (changed ? ', ' + changed + ' sent back for changes.' : '.');
+    }
+  }
+  function swipe(dir){
+    if (busy || !queue.length) return;
+    var top = queue.shift(); busy = true;
+    var idx = reels.indexOf(top);
+    top.classList.add(dir === 'right' ? 'out-right' : 'out-left');
+    if (dir === 'right'){ approved++; setStatus('Approved — scheduled for ' + slots[idx] + '.', false); }
+    else { changed++; setStatus('Sent back — Ootto will redraft with your note.', true); }
+    var done = function(){ top.style.display = 'none'; relayer(); busy = false; };
+    if (reduce) done(); else setTimeout(done, 380);
+  }
+  document.getElementById('swipe-right').addEventListener('click', function(){ swipe('right'); });
+  document.getElementById('swipe-left').addEventListener('click', function(){ swipe('left'); });
+  document.getElementById('deck-reset').addEventListener('click', reset);
+  document.addEventListener('keydown', function(e){
+    var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    if (e.key === 'ArrowRight'){ swipe('right'); } else if (e.key === 'ArrowLeft'){ swipe('left'); }
+  });
+  reset();
+
+  /* onboarding demo */
+  var form = document.getElementById('url-form'), input = document.getElementById('url');
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var v = input.value.trim().replace(/^https?:\/\//,'').replace(/^www\./,'').split('/')[0] || 'yourbrand.com';
+    document.querySelectorAll('#learn .dom').forEach(function(el){ el.textContent = v; });
+    var btn = form.querySelector('button'); var old = btn.textContent;
+    btn.textContent = 'Learned ✓'; btn.disabled = true;
+    setTimeout(function(){ btn.textContent = old; btn.disabled = false; }, 1400);
+  });
+})();
+</script>
+</body>
+</html>
