@@ -88,8 +88,8 @@ export async function renderReel({ plan, dir, provider, cfg, force = false, onPr
 
 	for (const [i, sc] of plan.scenes.entries()) {
 		const n = plan.scenes.length;
-		const imgKey = `img-${hash(sc.visual + '|' + brandStyle + '|' + provider.name)}`;
-		const voiceKey = `voice-${hash(sc.voiceover + '|' + provider.name + '|' + (provider.models?.voice || ''))}`;
+		const imgKey = `img-${hash(sc.visual + '|' + brandStyle + '|' + (provider.imageId || provider.name))}`;
+		const voiceKey = `voice-${hash(sc.voiceover + '|' + (provider.voiceId || `${provider.name}|${provider.models?.voice || ''}`))}`;
 		const img = path.join(dir, `${imgKey}.png`);
 		const voice = path.join(dir, `${voiceKey}.mp3`);
 

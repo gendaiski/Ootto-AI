@@ -19,13 +19,13 @@ export class OpenAIClient {
 		this.transcribeModel = transcribeModel || 'whisper-1';
 	}
 
-	async request(pathname, body, { binary = false, retries = 2 } = {}) {
+	async request(pathname, body, { binary = false, retries = 2, method = 'POST' } = {}) {
 		for (let attempt = 0; ; attempt++) {
 			const form = body instanceof FormData;
 			const res = await fetch(`${this.baseUrl}${pathname}`, {
-				method: 'POST',
+				method,
 				headers: form ? { Authorization: `Bearer ${this.apiKey}` } : { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
-				body: form ? body : JSON.stringify(body),
+				body: form ? body : body == null ? undefined : JSON.stringify(body),
 				signal: AbortSignal.timeout(180_000),
 			});
 			if (res.ok) return binary ? Buffer.from(await res.arrayBuffer()) : res.json();
@@ -98,5 +98,11 @@ export class OpenAIClient {
 			segments: (data.segments || []).map((s) => ({ start: num(s.start), end: num(s.end), text: String(s.text || '').trim() })),
 			words: (data.words || []).map((w) => ({ start: num(w.start), end: num(w.end), word: String(w.word || '').trim() })),
 		};
+	}
+
+	// Cheap key check: list models.
+	async check() {
+		const data = await this.request('/models', null, { method: 'GET', retries: 0 });
+		return (data.data || []).map((m) => m.id).slice(0, 5);
 	}
 }

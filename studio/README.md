@@ -1,14 +1,13 @@
 # Ootto Studio
 
-Plan, generate, review and post a week of Instagram Reels for a business, using OpenAI. Learn from reels that already work: watch them, break them down, and remake their format for your business.
+Plan, generate, review and post a week of Instagram Reels for a business, using OpenAI, Claude, or both. Learn from reels that already work: watch them, break them down, and remake their format for your business.
 
 1. **Brief.** Enter the business once: website (read once for facts), what it does, audience, main call to action, tone and language.
-2. **Plan.** OpenAI writes up to 7 reels for the week. Each has a hook, 3 to 6 scenes (on-screen text, voiceover line and image prompt), a caption, hashtags and a posting time.
+2. **Plan.** OpenAI or Claude writes up to 7 reels for the week. Each has a hook, 3 to 6 scenes (on-screen text, voiceover line and image prompt), a caption, hashtags and a posting time.
 3. **Generate.** For every scene, OpenAI makes a vertical image and speaks the voiceover line.
 4. **Render.** ffmpeg turns each reel into a 1080×1920, 30 fps H.264/AAC MP4. Every scene gets a slow zoom or pan, sized to its voice line. A boxed headline sits at the top and word-by-word captions sit at the bottom, both kept clear of Instagram's own buttons.
-5. **Review.** Watch each reel in a phone frame. Approve with ✓ or the → key. Request changes with ✕ or the ← key and a short note. OpenAI rewrites that reel, and only the scenes that changed are regenerated.
+5. **Review.** Watch each reel in a phone frame. Approve with ✓ or the → key. Request changes with ✕ or the ← key and a short note. The AI rewrites that reel, and only the scenes that changed are regenerated.
 6. **Post.** Approved reels post themselves at their scheduled time through the Instagram Graph API. Without Instagram connected, download the MP4, copy the caption and post by hand.
-
 7. **Watch & remake.** Paste reel links or upload videos. Studio watches each one frame by frame, listens to it and breaks down the hook, format, beats, pacing and layout. Then remake it for your business, or compare several to find the patterns they share and plan new reels from those patterns. See [Watch & remake](#watch--remake).
 
 ## Run it
@@ -18,11 +17,37 @@ Requires Node.js 20 or newer. ffmpeg comes bundled through `ffmpeg-static`. To w
 ```
 cd studio
 npm install
-cp .env.example .env      # then add OPENAI_API_KEY
 npm start                 # open http://localhost:3000
 ```
 
-With no `OPENAI_API_KEY` the studio runs in **mock mode**. It uses template scripts, placeholder images and silent voice, so you can try the whole flow at no cost. The header shows which mode is active.
+Then open **Settings** in the studio and paste an OpenAI key, a Claude key, or both. Press **Test** to check a key before you save it. Keys can also go in `.env` (`cp .env.example .env`). A key saved in Settings wins over `.env`.
+
+With no key at all the studio runs in **mock mode**. It uses template scripts, placeholder images and silent voice, so you can try the whole flow at no cost. The header shows which mode is active; click it to open Settings.
+
+## OpenAI, Claude, or both
+
+| Job | OpenAI key | Claude key only | Both keys |
+| --- | --- | --- | --- |
+| Scripts, rewrites, remakes, patterns | OpenAI | Claude | your choice (Settings) |
+| Reel analysis (reads the frames) | OpenAI | Claude | your choice (Settings) |
+| Scene images | `gpt-image-1` | text-card backgrounds (no AI images) | OpenAI |
+| Voiceover | `gpt-4o-mini-tts` | none, captions only | OpenAI |
+| Transcribing watched reels | `whisper-1` | the site's captions only | OpenAI |
+
+Claude writes and reads images but does not generate images or audio. With only a Claude key you still get complete reels: dark text-card backgrounds tinted with your accent colour, the boxed headline and word-by-word captions, and a silent soundtrack (add music in Instagram when you post). For AI photos and voice, add an OpenAI key too. A common setup is **Claude for writing and analysis, OpenAI for images and voice**.
+
+Claude models: `claude-opus-5-5` (default, best quality), `claude-sonnet-5-5` (balanced), `claude-haiku-4-5-20251001` (fastest, cheapest). Pick one in Settings or set `ANTHROPIC_MODEL`.
+
+How Claude is called: `POST https://api.anthropic.com/v1/messages` with `x-api-key` and `anthropic-version: 2023-06-01`. The output schema is sent as a tool's `input_schema` with `tool_choice` forcing that tool, so the answer arrives as structured JSON. Watched-reel frames go as base64 `image` blocks. 429 and 529 (overloaded) are retried.
+
+## Settings, usage and safety
+
+- **Settings tab.** Save, test and remove keys; choose which AI does scripts and which does reel analysis; pick the Claude model; see what each job currently uses.
+- **Where keys live.** Saved keys go to `data/settings.json` (readable only by your user), not to `db.json`. The browser never receives a saved key back, only its last four characters.
+- **Usage.** Settings counts this month's paid calls (script calls, reel analyses, images, voice lines, transcriptions) and reels rendered, watched and posted. Your bill comes from OpenAI and Anthropic.
+- **Monthly limits.** Cap images and watched reels per month; the studio stops before going over. For a hard cap on spend, also set limits in your [OpenAI](https://platform.openai.com/settings/organization/limits) and [Anthropic](https://console.anthropic.com/settings/limits) accounts.
+- **Who can change settings.** The studio listens on `127.0.0.1` (this computer only) by default. Settings can only be changed from this computer unless `STUDIO_PASSWORD` is set.
+- **Password.** Set `STUDIO_PASSWORD` whenever the studio is reachable from elsewhere (`HOST=0.0.0.0`, a tunnel for Instagram, a server). Every page and API call then asks for it, except `/media`, which Instagram needs to download videos. Settings shows a warning if `PUBLIC_BASE_URL` is set without a password.
 
 ## What OpenAI is used for
 
@@ -89,17 +114,23 @@ Posting follows Instagram's own sequence. The studio creates a `REELS` container
 - **Cut detection:** hard cuts are found reliably. Very similar shots, slow dissolves and cuts between near-identical frames can be missed; `WATCH_SCENE_THRESHOLD` adjusts the sensitivity. The vision model still sees the frames when it sets the beats.
 - **Remakes use still images:** a remake reproduces the structure and timing with AI stills and motion, not filmed footage.
 
+## For developers
+
+See [docs/DEVELOPER.md](docs/DEVELOPER.md) for the architecture, data model, full API reference, how a request flows through the pipeline, and how to add a provider.
+
 ## Files
 
 ```
 src/server.js      HTTP API, the studio page and rendered media
 src/planner.js     prompts, JSON schema, clean-up, mock scripts
-src/openai.js      OpenAI client (chat JSON, images, speech) with retries
-src/providers.js   OpenAI and mock providers
+src/openai.js      OpenAI client (chat JSON, images, speech, transcription) with retries
+src/providers.js   routes each job to OpenAI, Claude, text cards or mock
 src/render.js      scene clips, captions (libass), joining, thumbnail
 src/jobs.js        render queue and posting scheduler
 src/instagram.js   Instagram Graph API publishing
 src/brief.js       website text extraction
+src/anthropic.js   Claude client (structured output via a forced tool call, images, retries)
+src/settings.js    saved keys and choices (data/settings.json), usage metering and monthly caps
 src/fetchvideo.js  reel downloads (yt-dlp) and uploads
 src/measure.js     cuts, key frames, speech track, caption parsing (ffmpeg)
 src/analyze.js     beat-by-beat breakdown and patterns across reels
@@ -128,4 +159,6 @@ The tests never call the real OpenAI or Instagram. They run the real code agains
 - **Reliability:** caching, retries and error messages.
 - **Posting:** Instagram's upload, wait and publish sequence.
 - **Whole flow:** the full API in mock mode.
+- **Claude:** request headers and body, forced tool output, image blocks, retries on 529, clear errors (bad key, max_tokens, refusal), OpenAI/Claude routing, and a full Claude-only reel.
+- **Settings:** keys saved only on disk and masked in every response, live provider switching, key tests, remote edits refused without a password, the password gate, usage counts and monthly caps.
 - **Watching:** cut detection and key frames on a real test video, caption parsing, a stand-in yt-dlp (arguments, login errors, missing install), the vision and transcription requests, remakes that keep the original timing, and patterns across reels.

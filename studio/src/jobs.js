@@ -45,6 +45,7 @@ export class Jobs {
 						source, dir: this.store.reelDir(id), provider: this.provider, cfg: this.cfg,
 						onProgress: (m) => this.store.updateSource(id, { progress: m }),
 					});
+					this.store.bumpUsage('watched');
 					if (this.store.source(id)) this.store.updateSource(id, { ...result, status: 'ready', progress: '', error: null });
 				} catch (e) {
 					this.log.error(`[watch ${id}]`, e.message);
@@ -76,6 +77,7 @@ export class Jobs {
 						plan: reel.plan, dir: this.store.reelDir(id), provider: this.provider, cfg: this.cfg, force,
 						onProgress: (m) => this.store.updateReel(id, { progress: m }),
 					});
+					this.store.bumpUsage('rendered');
 					const keepApproved = reel.approvedFor === JSON.stringify(reel.plan);
 					this.store.updateReel(id, { status: keepApproved ? 'approved' : 'ready', media, progress: '', error: null });
 				} catch (e) {
@@ -101,6 +103,7 @@ export class Jobs {
 				videoUrl, caption: captionFor(reel.plan),
 				onProgress: (m) => this.store.updateReel(id, { progress: m }),
 			});
+			this.store.bumpUsage('posted');
 			return this.store.updateReel(id, { status: 'posted', ig, progress: '' });
 		} catch (e) {
 			this.store.updateReel(id, { status: 'approved', progress: '', error: e.message });

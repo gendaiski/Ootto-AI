@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+const monthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
 export class Store {
 	constructor(dataDir) {
 		this.dir = dataDir;
@@ -13,6 +15,7 @@ export class Store {
 		this.data = fs.existsSync(this.file) ? JSON.parse(fs.readFileSync(this.file, 'utf8')) : { brands: [], reels: [] };
 		this.data.sources ??= [];
 		this.data.profiles ??= [];
+		this.data.usage ??= {};
 		this.writing = Promise.resolve();
 	}
 
@@ -75,6 +78,17 @@ export class Store {
 	profile(id) { return this.data.profiles.find((p) => p.id === id); }
 	addProfile(p) { this.data.profiles.push(p); this.save(); return p; }
 	removeProfile(id) { this.data.profiles = this.data.profiles.filter((p) => p.id !== id); this.save(); }
+
+	// Monthly counters: "text.openai", "images.openai", "watched", "rendered", …
+	bumpUsage(key, n = 1, month = monthKey()) {
+		const m = (this.data.usage[month] ??= {});
+		m[key] = (m[key] || 0) + n;
+		this.save();
+	}
+	usage(month = monthKey()) {
+		const counts = { ...(this.data.usage[month] || {}) };
+		return { month, counts, images: counts['images.openai'] || 0, watched: counts.watched || 0 };
+	}
 
 	// Media folder for a reel or a watched source.
 	reelDir(id) {

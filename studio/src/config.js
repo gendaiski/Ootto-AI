@@ -19,9 +19,14 @@ const env = (k, d = '') => (process.env[k] ?? d).trim();
 
 export function getConfig() {
 	const openaiKey = env('OPENAI_API_KEY');
-	const mock = env('MOCK') === '1' || !openaiKey;
+	const anthropicKey = env('ANTHROPIC_API_KEY');
+	// Mock when forced, or when neither key is set (keys saved in Settings are applied later).
+	const mock = env('MOCK') === '1' || (!openaiKey && !anthropicKey);
 	return {
 		port: Number(env('PORT', '3000')),
+		host: env('HOST', '127.0.0.1'),
+		password: env('STUDIO_PASSWORD'),
+		forceMock: env('MOCK') === '1',
 		dataDir: path.resolve(ROOT, env('DATA_DIR', 'data')),
 		fontsDir: path.join(ROOT, 'assets', 'fonts'),
 		mock,
@@ -36,6 +41,14 @@ export function getConfig() {
 			visionModel: env('OPENAI_VISION_MODEL') || env('OPENAI_TEXT_MODEL', 'gpt-4o'),
 			transcribeModel: env('OPENAI_TRANSCRIBE_MODEL', 'whisper-1'),
 		},
+		anthropic: {
+			apiKey: anthropicKey,
+			baseUrl: env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1').replace(/\/$/, ''),
+			model: env('ANTHROPIC_MODEL', 'claude-opus-5-5'),
+		},
+		// Which AI writes scripts (plans, remakes, patterns) and which analyses watched reels:
+		// auto | openai | anthropic. auto uses OpenAI when its key is set, otherwise Claude.
+		ai: { text: env('AI_TEXT_PROVIDER', 'auto'), vision: env('AI_VISION_PROVIDER', 'auto') },
 		watch: {
 			ytdlpPath: env('YTDLP_PATH', 'yt-dlp'),
 			cookiesFile: env('YTDLP_COOKIES'),

@@ -18,6 +18,7 @@
 		<nav class="tabs" aria-label="Sections">
 			<button class="tab" type="button" data-tab="plan" aria-current="page">Plan &amp; review</button>
 			<button class="tab" type="button" data-tab="watch">Watch &amp; remake</button>
+			<button class="tab" type="button" data-tab="settings">Settings</button>
 		</nav>
 		<div class="status" id="status" aria-live="polite"></div>
 		<div class="brand-pick" id="brand-pick" hidden>
@@ -132,6 +133,21 @@
 			<p class="hint">Tick “Compare” on two or more watched reels, then Find patterns.</p>
 		</div>
 		<ul class="profiles" id="profiles" aria-label="Patterns"></ul>
+	</section>
+
+	<!-- Settings: AI keys, who does what, usage -->
+	<section id="settings" hidden>
+		<div class="ws-head">
+			<div>
+				<p class="eyebrow">Settings</p>
+				<h1>Connect your AI</h1>
+				<p class="lede">Ootto runs on your own API keys, so you pay OpenAI or Anthropic directly for what you use. Keys stay on the computer running the studio and are only sent to the service they belong to.</p>
+			</div>
+		</div>
+		<div id="set-alerts"></div>
+		<div class="keys-grid" id="set-keys"></div>
+		<div class="card set-card" id="set-routing"></div>
+		<div class="card set-card" id="set-usage"></div>
 	</section>
 </main>
 

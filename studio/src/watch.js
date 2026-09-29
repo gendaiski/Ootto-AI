@@ -42,7 +42,11 @@ export async function watchSource({ source, dir, provider, cfg, onProgress = () 
 	if (!transcript.text && captions) {
 		transcript = transcriptFromSegments(parseCaptions(fs.readFileSync(path.join(dir, captions), 'utf8')), 'captions');
 	}
-	if (!transcript.text && info.audio && !provider.transcribe) warnings.push('No captions came with this video and mock mode cannot transcribe. Add an OpenAI key to hear the words.');
+	if (!transcript.text && info.audio && !provider.transcribe) {
+		warnings.push(provider.mode === 'mock'
+			? 'No captions came with this video and mock mode cannot transcribe. Add an OpenAI key to hear the words.'
+			: 'No captions came with this video. Speech is transcribed with OpenAI; Claude reads the frames but cannot hear audio. Add an OpenAI key in Settings to include the spoken words.');
+	}
 
 	onProgress(provider.name === 'mock' ? 'Measuring pacing' : 'Analysing hook, structure and pacing');
 	const measured = { duration: info.duration, cuts, frames, transcript, meta };

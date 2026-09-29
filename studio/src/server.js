@@ -1,6 +1,7 @@
 // Ootto Studio HTTP server: JSON API + static web app + rendered media.
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import express from 'express';
 import { getConfig, instagramReady, ROOT, WATCH_DEFAULTS } from './config.js';
 import { Store } from './store.js';
@@ -12,6 +13,9 @@ import { captionFor } from './instagram.js';
 import { isHttpUrl, downloaderVersion, uploadTarget } from './fetchvideo.js';
 import { findPatterns } from './analyze.js';
 import { remakePlan, exactPlan } from './remake.js';
+import { Settings, meter, CLAUDE_MODELS } from './settings.js';
+import { OpenAIClient } from './openai.js';
+import { AnthropicClient } from './anthropic.js';
 
 // Local date at the reel's posting time, dayOffset days after startDate (YYYY-MM-DD).
 export function scheduleFor(startDate, dayOffset, hhmm) {
@@ -25,11 +29,45 @@ const tomorrow = () => {
 	return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 };
 
-export function createApp(cfg = getConfig(), { provider = createProvider(cfg), log = console } = {}) {
+// A provider whose implementation can be replaced while the server runs (after Settings change),
+// so the job queues keep their reference.
+function swappable(initial) {
+	let current = initial;
+	return new Proxy({}, {
+		get: (_, k) => (k === 'swap' ? (next) => { current = next; } : current[k]),
+		has: (_, k) => k in current,
+	});
+}
+
+// Loopback and not forwarded by a proxy or tunnel (a tunnel also connects from 127.0.0.1).
+export function isLocalRequest(req) {
+	const ip = req.socket.remoteAddress || '';
+	const loopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+	return loopback && !req.headers['x-forwarded-for'] && !req.headers.forwarded && !req.headers['cf-connecting-ip'] && !req.headers['x-real-ip'];
+}
+
+const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
+
+export function createApp(cfg = getConfig(), { provider: override = null, log = console } = {}) {
 	cfg.watch = { ...WATCH_DEFAULTS, ...(cfg.watch || {}) };
 	const store = new Store(cfg.dataDir);
+	const settings = new Settings(cfg.dataDir);
+	const build = () => meter(override || createProvider(settings.apply(cfg)), store, () => settings.limits());
+	const provider = swappable(build());
 	const jobs = new Jobs({ store, provider, cfg, log });
 	const app = express();
+
+	// Optional password (HTTP Basic, any user name). /media stays open because Instagram downloads
+	// the videos from there.
+	if (cfg.password) {
+		app.use((req, res, next) => {
+			if (req.path.startsWith('/media/')) return next();
+			const [type, value] = String(req.headers.authorization || '').split(' ');
+			const given = type === 'Basic' ? Buffer.from(value || '', 'base64').toString().split(':').slice(1).join(':') : '';
+			if (given && crypto.timingSafeEqual(sha(given), sha(cfg.password))) return next();
+			res.set('WWW-Authenticate', 'Basic realm="Ootto Studio", charset="UTF-8"').status(401).send('Password required.');
+		});
+	}
 	app.use(express.json({ limit: '1mb' }));
 
 	const wrap = (fn) => (req, res) => Promise.resolve(fn(req, res)).catch((e) => {
@@ -41,7 +79,8 @@ export function createApp(cfg = getConfig(), { provider = createProvider(cfg), l
 	const view = (r) => ({ ...r, captionText: captionFor(r.plan), videoUrl: r.media?.video ? `/media/${r.id}/${r.media.video}?v=${encodeURIComponent(r.media.renderedAt)}` : null, thumbUrl: r.media?.thumb ? `/media/${r.id}/${r.media.thumb}?v=${encodeURIComponent(r.media.renderedAt)}` : null });
 
 	app.get('/api/status', wrap(async (req, res) => res.json({
-		mode: provider.name,
+		mode: provider.mode,
+		providers: provider.parts,
 		models: provider.models,
 		instagram: { connected: instagramReady(cfg), userId: cfg.instagram.userId ? `…${cfg.instagram.userId.slice(-4)}` : null, publicBaseUrl: cfg.instagram.publicBaseUrl || null },
 		watch: { downloader: await downloaderVersion(cfg.watch), maxSeconds: cfg.watch.maxSeconds, uploadLimitMb: cfg.watch.uploadLimitMb },
@@ -142,6 +181,58 @@ export function createApp(cfg = getConfig(), { provider = createProvider(cfg), l
 		res.download(path.join(store.reelDir(r.id), r.media.video), `${safe}.mp4`);
 	});
 
+	// ---------- settings: keys, providers, usage ----------
+	const canEdit = (req) => Boolean(cfg.password) || isLocalRequest(req);
+	const settingsView = (req) => {
+		const eff = settings.apply(cfg);
+		return {
+			keys: settings.keyView(cfg),
+			text: eff.ai.text, vision: eff.ai.vision,
+			anthropicModel: eff.anthropic.model, claudeModels: CLAUDE_MODELS,
+			active: { mode: provider.mode, parts: provider.parts, models: provider.models },
+			limits: settings.limits(), usage: store.usage(),
+			canEdit: canEdit(req),
+			exposed: Boolean(cfg.instagram.publicBaseUrl) && !cfg.password,
+		};
+	};
+	const needEdit = (req) => {
+		if (!canEdit(req)) throw bad('Settings can only be changed on the computer running the studio. To change them from elsewhere, set STUDIO_PASSWORD.', 403);
+	};
+
+	app.get('/api/settings', (req, res) => res.json(settingsView(req)));
+
+	app.put('/api/settings', wrap(async (req, res) => {
+		needEdit(req);
+		try { settings.update(req.body || {}); } catch (e) { throw bad(e.message); }
+		provider.swap(build());
+		res.json(settingsView(req));
+	}));
+
+	// Checks a key by listing models. Uses the key in the body, or the one already configured.
+	app.post('/api/settings/test', wrap(async (req, res) => {
+		needEdit(req);
+		const eff = settings.apply(cfg);
+		const service = req.body?.service === 'anthropic' ? 'anthropic' : 'openai';
+		const key = String(req.body?.key || '').trim() || eff[service].apiKey;
+		if (!key) throw bad(`No ${service === 'openai' ? 'OpenAI' : 'Claude'} key to test yet.`);
+		const client = service === 'openai' ? new OpenAIClient({ ...eff.openai, apiKey: key }) : new AnthropicClient({ ...eff.anthropic, apiKey: key, timeoutMs: 20_000 });
+		try {
+			const models = await client.check();
+			res.json({ ok: true, service, models });
+		} catch (e) {
+			res.json({ ok: false, service, error: e.message });
+		}
+	}));
+
+	const checkWatchLimit = (adding) => {
+		const { watchesPerMonth } = settings.limits();
+		if (!watchesPerMonth || provider.mode !== 'live') return;
+		const pending = store.sources().filter((x) => x.status === 'queued' || x.status === 'watching').length;
+		if (store.usage().watched + pending + adding > watchesPerMonth) {
+			throw bad(`This would pass your monthly limit of ${watchesPerMonth} watched reels. Raise it in Settings.`);
+		}
+	};
+
 	// ---------- watch & remake ----------
 	const needSource = (s) => { if (!s) throw bad('Watched reel not found.', 404); return s; };
 	const shortUrl = (u) => { try { const x = new URL(u); return `${x.hostname.replace(/^www\./, '')}${x.pathname.replace(/\/$/, '')}`.slice(0, 60); } catch { return u; } };
@@ -169,7 +260,9 @@ export function createApp(cfg = getConfig(), { provider = createProvider(cfg), l
 		if (invalid.length) throw bad(`Not a valid link: ${invalid[0].slice(0, 80)}`);
 		if (raw.length > 50) throw bad('Add at most 50 links at a time.');
 		const known = new Set(store.sources().map((s) => s.url));
-		const added = [...new Set(raw)].filter((u) => !known.has(u)).map((url) => newSource({ url, name: url }));
+		const fresh = [...new Set(raw)].filter((u) => !known.has(u));
+		checkWatchLimit(fresh.length);
+		const added = fresh.map((url) => newSource({ url, name: url }));
 		added.forEach((s) => jobs.enqueueWatch(s.id));
 		res.status(201).json({ added: added.map((s) => sview(store.source(s.id))), skipped: raw.length - added.length });
 	}));
@@ -177,6 +270,7 @@ export function createApp(cfg = getConfig(), { provider = createProvider(cfg), l
 	// Raw video bytes in the body; ?name= keeps the original file name as the title.
 	app.post('/api/sources/upload', express.raw({ type: () => true, limit: `${cfg.watch.uploadLimitMb}mb` }), wrap(async (req, res) => {
 		if (!Buffer.isBuffer(req.body) || req.body.length < 1000) throw bad('Choose a video file to upload.');
+		checkWatchLimit(1);
 		const name = String(req.query.name || 'upload.mp4').slice(0, 120);
 		const s = newSource({ url: null, name, meta: { url: null, platform: 'Upload', title: name.replace(/\.[^.]+$/, ''), uploader: null, caption: null, views: null, likes: null, comments: null, uploadDate: null } });
 		const file = uploadTarget(name);
@@ -189,6 +283,7 @@ export function createApp(cfg = getConfig(), { provider = createProvider(cfg), l
 	app.post('/api/sources/:id/watch', wrap(async (req, res) => {
 		const s = needSource(store.source(req.params.id));
 		if (['queued', 'watching'].includes(s.status)) throw bad('This reel is already being watched.');
+		checkWatchLimit(1);
 		jobs.enqueueWatch(s.id);
 		res.json(sview(store.source(s.id)));
 	}));
@@ -246,7 +341,7 @@ export function createApp(cfg = getConfig(), { provider = createProvider(cfg), l
 	app.use('/media', express.static(store.mediaDir, { fallthrough: false, maxAge: '1h' }));
 	app.use(express.static(path.join(ROOT, 'public')));
 
-	return { app, store, jobs, provider, cfg };
+	return { app, store, jobs, provider, cfg, settings };
 }
 
 const isMain = process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(new URL(import.meta.url).pathname);
@@ -254,8 +349,12 @@ if (isMain) {
 	const ctx = createApp();
 	ctx.jobs.resume();
 	ctx.jobs.startScheduler();
-	ctx.app.listen(ctx.cfg.port, () => {
-		const mode = ctx.provider.name === 'openai' ? `OpenAI (${Object.values(ctx.provider.models).join(', ')})` : 'MOCK mode (no OPENAI_API_KEY): placeholder images, silent voice';
+	ctx.app.listen(ctx.cfg.port, ctx.cfg.host, () => {
+		const m = ctx.provider.models;
+		const mode = ctx.provider.mode === 'live'
+			? `scripts ${m.text}, analysis ${m.vision}, images ${m.image}, voice ${m.voice}`
+			: 'MOCK mode (no API key): placeholder images, silent voice. Add a key in Settings or .env';
+		if (ctx.cfg.host !== '127.0.0.1' && !ctx.cfg.password) console.warn(`Listening on ${ctx.cfg.host} without STUDIO_PASSWORD: anyone on your network can use this studio.`);
 		downloaderVersion(ctx.cfg.watch).then((v) => console.log(`Ootto Studio on http://localhost:${ctx.cfg.port}\nContent: ${mode}\nInstagram: ${instagramReady(ctx.cfg) ? 'connected' : 'not connected (reels can still be downloaded)'}\nReel links: ${v ? `yt-dlp ${v}` : 'yt-dlp not found (install it to watch links; uploads still work)'}`));
 	});
 }

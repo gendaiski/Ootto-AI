@@ -31,7 +31,18 @@
 		const parts = url.pathname.split('/').filter(Boolean); // api, reels, id, action
 		await new Promise((r) => setTimeout(r, 120));
 
-		if (url.pathname === '/api/status') return json({ mode: 'demo', models: { text: 'demo', image: 'demo', voice: 'demo' }, instagram: { connected: false, userId: null, publicBaseUrl: null }, watch: { downloader: null, maxSeconds: 600, uploadLimitMb: 300 }, queue: 0, watchQueue: 0 });
+		if (url.pathname === '/api/status') return json({ mode: 'demo', models: { text: 'demo', image: 'demo', voice: 'demo' }, instagram: { connected: false, userId: null, publicBaseUrl: null }, providers: { text: 'mock', vision: 'mock', image: 'mock', voice: 'mock', transcribe: 'captions' }, watch: { downloader: null, maxSeconds: 600, uploadLimitMb: 300 }, queue: 0, watchQueue: 0 });
+		if (parts[1] === 'settings') {
+			if (method !== 'GET') return fail('Keys cannot be entered in this online demo. Run the studio on your computer and open Settings there.', 403);
+			const none = { configured: false, source: null, hint: null };
+			return json({
+				demo: true, canEdit: false, exposed: false, keys: { openai: none, anthropic: none },
+				text: 'auto', vision: 'auto', anthropicModel: 'claude-opus-5-5', claudeModels: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5-20251001'],
+				active: { mode: 'mock', parts: { text: 'mock', vision: 'mock', image: 'mock', voice: 'mock', transcribe: 'captions' }, models: { text: 'mock', vision: 'mock', image: 'mock', voice: 'mock', transcribe: 'captions only' } },
+				limits: { imagesPerMonth: 0, watchesPerMonth: 0 },
+				usage: { month: new Date().toISOString().slice(0, 7), counts: {}, images: 0, watched: 0 },
+			});
+		}
 		const LOCAL = 'needs the studio running on your computer with your OpenAI key (see studio/README.md). This demo already includes three watched reels, one pattern set, a remake and a reel planned from the patterns.';
 		if (parts[1] === 'sources') {
 			if (method === 'GET' && !parts[2]) return json(db.sources);

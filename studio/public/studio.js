@@ -19,6 +19,7 @@ const state = {
 	status: null, brands: [], brandId: null, reels: [], selectedId: null, busy: false,
 	tab: 'plan', onboarding: false,
 	sources: [], sourceId: null, picked: new Set(), profiles: [], profileId: null,
+	settings: null,
 };
 const BUSY = new Set(['queued', 'rendering', 'posting']);
 const LABEL = { queued: 'Queued', rendering: 'Rendering', ready: 'Needs review', approved: 'Approved', posting: 'Posting', posted: 'Posted', failed: 'Failed' };
@@ -48,9 +49,10 @@ const localInput = (iso) => { const d = new Date(iso); return `${isoDay(d)}T${St
 function renderStatus() {
 	const s = state.status; const box = $('#status'); box.replaceChildren();
 	if (!s) return;
-	const live = s.mode === 'openai';
-	const label = live ? 'OpenAI connected' : s.mode === 'demo' ? 'Demo data' : 'Mock mode';
-	box.append(el('span', { class: `pill ${live ? 'ok' : 'warn'}`, title: live ? `Script: ${s.models.text} · Images: ${s.models.image} · Voice: ${s.models.voice}` : 'No OPENAI_API_KEY set: placeholder images and silent voice' }, label));
+	const live = s.mode === 'live';
+	const used = live ? [...new Set([s.providers.text, s.providers.vision, s.providers.image])].filter((x) => x === 'openai' || x === 'anthropic') : [];
+	const label = live ? `${used.map((x) => (x === 'openai' ? 'OpenAI' : 'Claude')).join(' + ')} connected` : s.mode === 'demo' ? 'Demo data' : 'Mock mode · add a key';
+	box.append(el('button', { type: 'button', class: `pill ${live ? 'ok' : 'warn'}`, onclick: () => setTab('settings'), title: live ? `Scripts: ${s.models.text} · Analysis: ${s.models.vision} · Images: ${s.models.image} · Voice: ${s.models.voice}` : 'No API key yet: placeholder images and silent voice. Open Settings.' }, label));
 	box.append(el('span', { class: `pill ${s.instagram.connected ? 'ok' : 'off'}`, title: s.instagram.connected ? `Posting as account ${s.instagram.userId}` : 'Set IG_USER_ID, IG_ACCESS_TOKEN and PUBLIC_BASE_URL to post automatically' }, s.instagram.connected ? 'Instagram connected' : 'Instagram not connected'));
 }
 
@@ -64,17 +66,19 @@ function renderBrandPicker() {
 // Which main view shows: the Plan tab (onboarding or the week) or the Watch tab.
 function applyView() {
 	const plan = state.tab === 'plan';
-	$('#watch').hidden = plan;
+	$('#watch').hidden = state.tab !== 'watch';
+	$('#settings').hidden = state.tab !== 'settings';
 	$('#onboard').hidden = !plan || !(state.onboarding || !state.brands.length);
 	$('#workspace').hidden = !plan || !$('#onboard').hidden || !state.brandId;
 	for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-current', b.dataset.tab === state.tab ? 'page' : 'false');
 }
 
 function setTab(tab) {
-	state.tab = tab === 'watch' ? 'watch' : 'plan';
+	state.tab = ['watch', 'settings'].includes(tab) ? tab : 'plan';
 	try { localStorage.setItem('ootto.tab', state.tab); } catch {}
 	applyView();
 	if (state.tab === 'watch') renderWatch();
+	if (state.tab === 'settings') loadSettings();
 }
 
 function showOnboarding(show) {
@@ -335,7 +339,8 @@ function renderWatch() {
 			: 'yt-dlp is not installed, so links cannot be downloaded yet (pip install yt-dlp). Uploading a video works.');
 		parts.push(`Up to ${Math.round(st.watch.maxSeconds / 60)} min per video.`);
 	}
-	if (st?.mode === 'mock') parts.push('Mock mode: cuts, pacing and frames are measured; add an OpenAI key to read the text, visuals and speech.');
+	if (st?.mode === 'mock') parts.push('Mock mode: cuts, pacing and frames are measured; add a key in Settings to read the text, visuals and speech.');
+	if (st?.mode === 'live' && st.providers?.transcribe !== 'openai') parts.push('Claude reads the frames; spoken words need an OpenAI key (or captions from the site).');
 	hint.textContent = parts.join(' ');
 	const ready = state.sources.filter((x) => x.status === 'ready').length;
 	$('#w-eyebrow').textContent = state.sources.length ? `${state.sources.length} watched · ${ready} analysed · ${state.profiles.length} pattern set${state.profiles.length === 1 ? '' : 's'}` : 'Learn from reels that work';
@@ -594,6 +599,128 @@ async function planFromPatterns(pr, count, btn) {
 	} catch (e) { toast(e.message, true); setBusy(btn, false, 'Plan new reels from these patterns'); }
 }
 
+// ---------- settings: keys, who does what, usage ----------
+const SERVICE = {
+	openai: {
+		name: 'OpenAI', prefix: 'sk-', keyUrl: 'https://platform.openai.com/api-keys', limitUrl: 'https://platform.openai.com/settings/organization/limits',
+		does: ['Scripts, rewrites, remakes and patterns', 'Reel analysis (reads the frames)', 'Scene images (gpt-image-1)', 'Voiceover (text to speech)', 'Transcribing watched reels'],
+	},
+	anthropic: {
+		name: 'Claude', prefix: 'sk-ant-', keyUrl: 'https://console.anthropic.com/settings/keys', limitUrl: 'https://console.anthropic.com/settings/limits',
+		does: ['Scripts, rewrites, remakes and patterns', 'Reel analysis (reads the frames)'],
+		cannot: 'Claude does not make images or voice. With only a Claude key, reels use designed text-card backgrounds with captions and no voiceover. Add an OpenAI key as well for AI images, voice and transcription.',
+	},
+};
+const WHO = { openai: 'OpenAI', anthropic: 'Claude', cards: 'Text cards (no AI images)', none: 'None, captions only', captions: 'Site captions only', mock: 'Mock' };
+const MODEL_LABEL = { 'claude-opus-5-5': 'Claude Opus 5.5 (best quality)', 'claude-sonnet-5-5': 'Claude Sonnet 5.5 (balanced)', 'claude-haiku-4-5-20251001': 'Claude Haiku 4.5 (fastest, cheapest)' };
+
+async function loadSettings() {
+	try { state.settings = await api('/api/settings'); } catch (e) { toast(e.message, true); }
+	renderSettings();
+}
+
+async function saveSettings(body, okMsg) {
+	try {
+		state.settings = await api('/api/settings', { method: 'PUT', body });
+		toast(okMsg);
+		state.status = await api('/api/status');
+		renderStatus();
+	} catch (e) { toast(e.message, true); }
+	renderSettings();
+}
+
+function renderSettings() {
+	const st = state.settings;
+	if (!st) return;
+	const demo = state.status?.mode === 'demo' || Boolean(st.demo);
+	const locked = demo || !st.canEdit;
+	const alerts = [];
+	if (demo) alerts.push(el('div', { class: 'note' }, 'This is the online demo, so keys cannot be entered here. Run the studio on your computer (see studio/README.md), open Settings there and paste your key.'));
+	else if (!st.canEdit) alerts.push(el('div', { class: 'note' }, 'Settings can only be changed on the computer running the studio. To change them from another device, set STUDIO_PASSWORD in .env and restart.'));
+	if (st.exposed) alerts.push(el('div', { class: 'error' }, 'The studio is reachable from the internet through PUBLIC_BASE_URL but has no password. Set STUDIO_PASSWORD in .env so nobody else can use your keys.'));
+	if (st.active.mode !== 'live' && !demo) alerts.push(el('div', { class: 'note' }, 'No key yet: the studio runs in mock mode with placeholder images and silent voice. Add an OpenAI or Claude key below.'));
+	$('#set-alerts').replaceChildren(...alerts);
+
+	$('#set-keys').replaceChildren(...['openai', 'anthropic'].map((svc) => keyCard(svc, st.keys[svc], locked)));
+
+	// Who does what
+	const both = st.keys.openai.configured && st.keys.anthropic.configured;
+	const choice = (id, value, label) => el('label', { class: 'field' }, label, el('select', { id, disabled: locked || !both },
+		[['auto', 'Automatic'], ['openai', 'OpenAI'], ['anthropic', 'Claude']].map(([v, t]) => el('option', { value: v, selected: v === value }, t))));
+	const modelSel = el('label', { class: 'field' }, 'Claude model', el('select', { id: 'set-model', disabled: locked || !st.keys.anthropic.configured },
+		[...new Set([...st.claudeModels, st.anthropicModel])].map((m) => el('option', { value: m, selected: m === st.anthropicModel }, MODEL_LABEL[m] || m))));
+	const a = st.active;
+	const row = (job, part, model) => el('tr', {}, el('th', { scope: 'row' }, job), el('td', {}, WHO[part] || part), el('td', { class: 'mono' }, model || ''));
+	$('#set-routing').replaceChildren(
+		el('h2', {}, 'Who does what'),
+		el('p', { class: 'hint' }, both ? 'Both keys are set, so you can choose which AI writes and which one watches. Automatic uses OpenAI.' : 'Add both keys to choose between OpenAI and Claude for each job.'),
+		el('div', { class: 'grid3' }, choice('set-text', st.text, 'Scripts, remakes and patterns'), choice('set-vision', st.vision, 'Reel analysis'), modelSel),
+		el('div', { class: 'form-actions' }, el('button', { class: 'btn btn-ink btn-sm', type: 'button', disabled: locked, onclick: () => saveSettings({ text: $('#set-text').value, vision: $('#set-vision').value, anthropicModel: $('#set-model').value }, 'Saved') }, 'Save choices')),
+		el('div', { class: 'table-wrap' }, el('table', { class: 'who' },
+			el('thead', {}, el('tr', {}, el('th', { scope: 'col' }, 'Job'), el('th', { scope: 'col' }, 'Done by'), el('th', { scope: 'col' }, 'Model'))),
+			el('tbody', {},
+				row('Scripts, remakes, patterns', a.parts.text, a.models.text),
+				row('Reel analysis', a.parts.vision, a.models.vision),
+				row('Scene images', a.parts.image, a.parts.image === 'openai' ? a.models.image : ''),
+				row('Voiceover', a.parts.voice, a.parts.voice === 'openai' ? a.models.voice : ''),
+				row('Transcribing watched reels', a.parts.transcribe, a.parts.transcribe === 'openai' ? a.models.transcribe : '')))),
+	);
+
+	// Usage and limits
+	const c = st.usage.counts;
+	const sum = (prefix) => Object.entries(c).filter(([k]) => k.startsWith(prefix)).reduce((n, [, v]) => n + v, 0);
+	const monthName = new Date(`${st.usage.month}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+	const lim = (id, label, value, hint) => el('label', { class: 'field' }, label, el('input', { id, type: 'number', min: '0', step: '1', inputmode: 'numeric', value: String(value), disabled: locked }), el('span', { class: 'hint' }, hint));
+	$('#set-usage').replaceChildren(
+		el('h2', {}, 'Usage & limits'),
+		el('p', { class: 'hint' }, `${monthName}. Counts of paid calls made by this studio. Your bill comes from OpenAI and Anthropic.`),
+		el('div', { class: 'stats' },
+			stat('Script calls', sum('text.')), stat('Reel analyses', sum('vision.')), stat('Images', st.usage.images), stat('Voice lines', sum('voice.')),
+			stat('Transcriptions', sum('transcribe.')), stat('Reels rendered', c.rendered || 0), stat('Reels watched', c.watched || 0), stat('Posted', c.posted || 0)),
+		el('div', { class: 'grid3' },
+			lim('set-lim-img', 'Images per month', st.limits.imagesPerMonth, '0 means no limit. Images cost the most.'),
+			lim('set-lim-watch', 'Watched reels per month', st.limits.watchesPerMonth, '0 means no limit.')),
+		el('div', { class: 'form-actions' },
+			el('button', { class: 'btn btn-ink btn-sm', type: 'button', disabled: locked, onclick: () => saveSettings({ imagesPerMonth: Number($('#set-lim-img').value || 0), watchesPerMonth: Number($('#set-lim-watch').value || 0) }, 'Limits saved') }, 'Save limits'),
+			el('span', { class: 'hint' }, 'For a hard cap on spend, also set limits in ', el('a', { href: SERVICE.openai.limitUrl, target: '_blank', rel: 'noopener' }, 'OpenAI'), ' and ', el('a', { href: SERVICE.anthropic.limitUrl, target: '_blank', rel: 'noopener' }, 'Anthropic'), '.')),
+	);
+}
+
+function keyCard(svc, k, locked) {
+	const S = SERVICE[svc];
+	const input = el('input', { type: 'password', id: `key-${svc}`, placeholder: k.configured ? `Replace the saved key (${k.hint})` : `${S.prefix}…`, autocomplete: 'off', spellcheck: 'false', disabled: locked, 'aria-label': `${S.name} API key` });
+	const msg = el('p', { class: 'form-msg', role: 'status' });
+	const test = async () => {
+		msg.className = 'form-msg'; msg.textContent = 'Checking…';
+		try {
+			const r = await api('/api/settings/test', { method: 'POST', body: { service: svc, key: input.value.trim() || undefined } });
+			msg.textContent = r.ok ? `Works. ${S.name} answered${r.models?.length ? ` (models include ${r.models[0]})` : ''}.` : r.error;
+			msg.className = `form-msg ${r.ok ? 'ok' : 'err'}`;
+		} catch (e) { msg.textContent = e.message; msg.className = 'form-msg err'; }
+	};
+	const save = () => {
+		const v = input.value.trim();
+		if (!v) { msg.textContent = 'Paste a key first.'; msg.className = 'form-msg err'; return; }
+		saveSettings({ [svc === 'openai' ? 'openaiKey' : 'anthropicKey']: v }, `${S.name} key saved`);
+	};
+	input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+	return el('article', { class: 'card key-card' },
+		el('div', { class: 'key-head' },
+			el('h2', {}, S.name),
+			el('span', { class: `pill ${k.configured ? 'ok' : 'off'}` }, k.configured ? `Connected ${k.hint}` : 'Not connected')),
+		k.source === 'env' ? el('p', { class: 'hint' }, 'Set in .env. A key saved here takes priority.') : null,
+		el('ul', { class: 'plain does' }, S.does.map((d) => el('li', {}, d))),
+		S.cannot ? el('p', { class: 'hint' }, S.cannot) : null,
+		input,
+		el('div', { class: 'form-actions' },
+			el('button', { class: 'btn btn-accent btn-sm', type: 'button', disabled: locked, onclick: save }, 'Save key'),
+			el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: locked, onclick: test }, 'Test'),
+			k.source === 'studio' ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: locked, onclick: () => { if (confirm(`Remove the saved ${S.name} key?`)) saveSettings({ [svc === 'openai' ? 'clearOpenaiKey' : 'clearAnthropicKey']: true }, `${S.name} key removed`); } }, 'Remove') : null,
+			el('a', { class: 'ext', href: S.keyUrl, target: '_blank', rel: 'noopener' }, 'Get a key')),
+		msg,
+	);
+}
+
 // ---------- data loop ----------
 let pollTimer;
 async function refresh(pickFirst = false) {
@@ -624,7 +751,8 @@ async function refresh(pickFirst = false) {
 
 const t = new Date(Date.now() + 86400000);
 $('#f-start').value = isoDay(t); $('#more-start').value = isoDay(t);
-try { state.tab = localStorage.getItem('ootto.tab') === 'watch' ? 'watch' : 'plan'; } catch {}
-if (location.hash === '#watch') state.tab = 'watch';
+try { const t = localStorage.getItem('ootto.tab'); state.tab = ['watch', 'settings'].includes(t) ? t : 'plan'; } catch {}
+if (['#watch', '#settings'].includes(location.hash)) state.tab = location.hash.slice(1);
+if (state.tab === 'settings') loadSettings();
 for (const b of document.querySelectorAll('.tab')) b.addEventListener('click', () => setTab(b.dataset.tab));
 refresh(true);
