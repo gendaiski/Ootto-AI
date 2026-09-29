@@ -28,9 +28,10 @@ src/measure.js     ffmpeg: scene cuts, key frames, speech track; caption (VTT/SR
 src/analyze.js     reel breakdown schema + prompt; patterns across reels
 src/remake.js      format remakes and exact remakes
 src/watch.js       watch pipeline: download -> measure -> transcribe -> analyse
+src/selftest.js    system check: ffmpeg test render, data folder, yt-dlp, keys, Instagram, access
 src/store.js       db.json store (atomic, serialised writes), usage counters
 src/ffmpeg.js      ffmpeg runner and probe (no ffprobe needed)
-scripts/           build-demo.mjs (static demo), demo-shim.js (in-browser API for the demo)
+scripts/           build-demo.mjs (static demo), demo-shim.js (in-browser API for the demo), check.mjs (npm run check)
 test/              node:test suites with stand-in OpenAI, Claude, Instagram and yt-dlp
 ```
 
@@ -169,6 +170,7 @@ All JSON. Errors are `{ "error": "message" }` with a 4xx/5xx status. With `STUDI
 | GET | `/api/settings` | | `{ keys: { openai, anthropic: { configured, source, hint } }, text, vision, anthropicModel, claudeModels, active, limits, usage, canEdit, exposed }` |
 | PUT | `/api/settings` | any of `{ openaiKey, anthropicKey, clearOpenaiKey, clearAnthropicKey, text, vision, anthropicModel, imagesPerMonth, watchesPerMonth }` | settings view |
 | POST | `/api/settings/test` | `{ service: openai\|anthropic, key? }` | `{ ok, models }` or `{ ok: false, error }` |
+| POST | `/api/selftest` | | `{ ok, checks: [{ id, label, status: ok\|warn\|fail\|skip, detail }], at }` |
 | GET | `/media/<id>/<file>` | | rendered and watched media (public, for Instagram) |
 
 `PUT /api/settings` and `/api/settings/test` return 403 unless the request is local or a password is set. A request counts as local when it comes from loopback with no `X-Forwarded-For`, `Forwarded`, `X-Real-IP` or `CF-Connecting-IP` header, because a tunnel also connects from 127.0.0.1.
@@ -206,6 +208,7 @@ The tests use no network and no keys. `test/helpers.js` provides `fakeServer()` 
 | `anthropic.test.js` | Claude headers and body, forced tool output, image blocks, 529 retry, errors, routing, Claude-only reel |
 | `api.test.js` | the whole plan → render → approve → revise → post flow in mock mode, the scheduler |
 | `watch.test.js` | cuts, frames, audio and captions on a real clip; stand-in yt-dlp; vision and transcription requests; remakes; patterns |
+| `selftest.test.js` | system check results and next steps, read-only calls, the API route |
 | `settings.test.js` | key storage and masking, live switching, key tests, remote-edit protection, password, usage, caps |
 | `instagram.test.js`, `brief.test.js` | Graph API sequence; website text extraction |
 
@@ -213,7 +216,11 @@ Add a test with each change. A stand-in server beats mocking `fetch`, because it
 
 ## Demo build
 
-`npm run demo:build` starts the app in mock mode on a temporary data folder and drives it through the API. It plans a week, approves and revises reels, uploads three renders back as watched reels, finds patterns, makes a remake and a pattern-based reel, then writes `demo-dist/`. The output is one HTML page with CSS, JS and data inlined, plus the media files, with WebM copies for browsers without H.264. `demo-shim.js` replaces `fetch('/api/…')` in the page.
+`npm run demo:build` starts the app in mock mode on a temporary data folder and drives it through the API. It plans a week, approves and revises reels, uploads three renders back as watched reels, finds patterns, makes a remake and a pattern-based reel, then writes `demo-dist/`. The output is one HTML page with CSS, JS and data inlined, plus the media files, with WebM copies for browsers without H.264. `demo-shim.js` replaces `fetch('/api/…')` in the page. It simulates every flow in the browser: planning for any brand, rewriting, watching links or uploads, remaking, finding patterns and planning from them. It reuses the sample renders and analyses, labels the results as simulated, and never accepts keys. Its system check reports what the browser can do (video playback, storage) and points to `npm run check` for the rest.
+
+## In-app test guide
+
+`GUIDE` in `public/studio.js` lists the 10 test steps. The code for each feature calls `markDone(id)` once that action succeeds (for example after an approve returns). Progress is saved in `localStorage` when it is available. To add a step, add it to `GUIDE` and call `markDone` where the action succeeds.
 
 ## Conventions
 

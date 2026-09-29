@@ -11,7 +11,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test --test-concurrency=1 test/*.test.js",
-    "demo:build": "node scripts/build-demo.mjs"
+    "demo:build": "node scripts/build-demo.mjs",
+    "check": "node scripts/check.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",

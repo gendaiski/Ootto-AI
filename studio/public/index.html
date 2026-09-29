@@ -147,6 +147,7 @@
 		<div id="set-alerts"></div>
 		<div class="keys-grid" id="set-keys"></div>
 		<div class="card set-card" id="set-routing"></div>
+		<div class="card set-card" id="set-check"></div>
 		<div class="card set-card" id="set-usage"></div>
 	</section>
 </main>
@@ -189,6 +190,28 @@
 		</div>
 	</form>
 </dialog>
+
+<dialog id="confirm-dialog" class="dialog">
+	<form method="dialog">
+		<h2 id="confirm-title">Are you sure?</h2>
+		<p class="hint" id="confirm-text"></p>
+		<div class="form-actions">
+			<button class="btn btn-ghost" value="cancel" type="submit">Cancel</button>
+			<button class="btn btn-accent" value="ok" type="submit" id="confirm-ok">OK</button>
+		</div>
+	</form>
+</dialog>
+
+<button class="guide-btn" id="guide-btn" type="button" aria-controls="guide" aria-expanded="false">How to test <span id="guide-count"></span></button>
+<aside class="guide card" id="guide" hidden aria-label="How to test">
+	<div class="guide-head">
+		<div><h2>How to test</h2><p class="hint" id="guide-sub">Try each step. It ticks itself when it works.</p></div>
+		<button class="btn btn-ghost btn-sm" type="button" id="guide-close" aria-label="Close">Close</button>
+	</div>
+	<div class="guide-bar"><span id="guide-fill"></span></div>
+	<ol class="guide-steps" id="guide-steps"></ol>
+	<div class="form-actions"><button class="btn btn-ghost btn-sm" type="button" id="guide-reset">Start again</button></div>
+</aside>
 
 <div class="toast" id="toast" role="alert" hidden></div>
 <script src="studio.js" type="module"></script>

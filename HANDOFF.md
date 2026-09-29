@@ -10,7 +10,7 @@ Status: **complete and ready for review.** Everything below is on branch `claude
 | Business model notes | `BUSINESS-MODEL.md` | Done. Built from public search snippets and marked as such. |
 | Ootto Studio (the working app) | `studio/` | Done: plan, render, review, post; watch & remake; patterns; Settings with OpenAI and Claude keys; usage and caps. |
 | Studio developer guide | `studio/docs/DEVELOPER.md` | Architecture, request flows, data model, API reference, configuration, security, tests. |
-| Static demo build | `studio/scripts/build-demo.mjs` → `studio/demo-dist/` (git-ignored) | Done. |
+| Static demo build | `studio/scripts/build-demo.mjs` → `studio/demo-dist/` (git-ignored) | Done. Every flow works in the browser as a labelled simulation built from sample renders; no AI is called and no keys are accepted. |
 
 ## Run and verify (for a reviewer or another coding agent)
 
@@ -19,9 +19,14 @@ Needs Node.js 20+ (Node 22 was used). ffmpeg comes from `ffmpeg-static` and is d
 ```
 cd studio
 npm ci
-npm test               # 23 tests, about 2 minutes; no network or API keys needed
+npm test               # 26 tests, about 2 minutes; no network or API keys needed
+npm run check          # system check: ffmpeg render, data folder, yt-dlp, keys, Instagram
 npm start              # http://localhost:3000 (mock mode until a key is added)
 ```
+
+**Is it working?** Two built-in answers:
+- **System check:** Settings → Run system check, or `npm run check` in the terminal. It renders a test clip and checks the data folder, yt-dlp, each API key (by listing models, so no credits are spent), the Instagram account and the public address. Each line is ✓ ok, ! warning, ✗ broken or – not set up, with what to do next. The terminal command exits with code 1 if anything is broken.
+- **How to test** (button at the bottom right of the app): a 10-step checklist covering every feature. Each step ticks itself when it works: play, approve, request a change, plan, watch, jump to a beat, remake, find patterns, plan from patterns, system check. "Show me" jumps to the right place.
 
 Optional:
 ```
@@ -29,7 +34,7 @@ pip install yt-dlp     # needed only to watch reels from links; uploads work wit
 npm run demo:build     # about 5 minutes; writes demo-dist/ (static page + media)
 ```
 
-### Manual checklist
+### Manual checklist (with real keys)
 1. **Mock mode** (no keys): Plan & review → enter a business → **Plan my week** → reels render → approve with → and request changes with ←.
 2. **Watch & remake:** upload any short MP4 → it is watched (cuts, frames, pacing) → **Remake for my business** → the new reel appears in Plan & review with the same rhythm.
 3. **Settings:** paste a real OpenAI key and/or Claude key → **Test** → **Save**. The header shows which AI is connected. Plan a week again to see real scripts, images and voice.
@@ -43,6 +48,7 @@ npm run demo:build     # about 5 minutes; writes demo-dist/ (static page + media
 - The real OpenAI, Anthropic, Instagram and Instagram download endpoints were **not** called: the build environment blocked them. The first run with real keys is the main thing left to confirm (checklist steps 3–6).
 - ffmpeg work (cut detection, frames, audio, captions, rendering to 1080×1920 H.264/AAC) runs for real in the tests.
 - The web app was checked in Chromium at desktop and phone widths, in light and dark themes, with no console errors.
+- The online demo was checked by completing all 10 How to test steps both directly and inside a sandboxed iframe (scripts only: storage and pop-ups blocked), as embedded pages often are. The app uses in-page dialogs instead of browser pop-ups for that reason.
 
 ## Known limits (by design, documented in studio/README.md)
 

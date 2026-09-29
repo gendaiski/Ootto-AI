@@ -16,6 +16,7 @@ import { remakePlan, exactPlan } from './remake.js';
 import { Settings, meter, CLAUDE_MODELS } from './settings.js';
 import { OpenAIClient } from './openai.js';
 import { AnthropicClient } from './anthropic.js';
+import { runSelfTest } from './selftest.js';
 
 // Local date at the reel's posting time, dayOffset days after startDate (YYYY-MM-DD).
 export function scheduleFor(startDate, dayOffset, hhmm) {
@@ -223,6 +224,9 @@ export function createApp(cfg = getConfig(), { provider: override = null, log = 
 			res.json({ ok: false, service, error: e.message });
 		}
 	}));
+
+	// System check: ffmpeg, data folder, yt-dlp, keys, Instagram, access. Spends no credits.
+	app.post('/api/selftest', wrap(async (req, res) => res.json(await runSelfTest(settings.apply(cfg)))));
 
 	const checkWatchLimit = (adding) => {
 		const { watchesPerMonth } = settings.limits();

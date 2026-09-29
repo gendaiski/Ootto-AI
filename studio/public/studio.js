@@ -147,7 +147,7 @@ function renderStage() {
 		if (shownVideo === r.videoUrl) return;
 		shownVideo = r.videoUrl;
 		// MP4 (H.264, what Instagram gets) first; an optional WebM copy for browsers without H.264.
-		screen.replaceChildren(el('video', { poster: r.thumbUrl, controls: true, playsinline: true, loop: true, preload: 'metadata', 'aria-label': `Preview of ${r.plan.title}` },
+		screen.replaceChildren(el('video', { poster: r.thumbUrl, controls: true, playsinline: true, loop: true, preload: 'metadata', 'aria-label': `Preview of ${r.plan.title}`, onplay: () => markDone('play') },
 			el('source', { src: r.videoUrl, type: 'video/mp4' }),
 			r.videoWebmUrl ? el('source', { src: r.videoWebmUrl, type: 'video/webm' }) : null));
 		return;
@@ -192,7 +192,7 @@ function renderDetail() {
 		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: busy || r.status === 'posted', onclick: () => act(r, 'render', {}, 'Re-rendering') }, 'Re-render'),
 		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: busy || r.status === 'posted', title: 'Create new images and voice for every scene (uses OpenAI credits)', onclick: () => act(r, 'render', { regenerateMedia: true }, 'Making new images and voice') }, 'New images & voice'),
 		r.status === 'approved' ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => act(r, 'unapprove', {}, 'Moved back to review') }, 'Back to review') : null,
-		el('button', { class: 'btn btn-accent btn-sm', type: 'button', disabled: !igReady || !r.videoUrl || busy || r.status === 'posted', title: igReady ? 'Post to Instagram now' : 'Instagram is not connected', onclick: () => { if (confirmPost(r)) act(r, 'publish', {}, 'Posted to Instagram'); } }, 'Post now'),
+		el('button', { class: 'btn btn-accent btn-sm', type: 'button', disabled: !igReady || !r.videoUrl || busy || r.status === 'posted', title: igReady ? 'Post to Instagram now' : 'Instagram is not connected', onclick: async () => { if (await ask(`Post "${r.plan.title}" to Instagram now?`, { title: 'Post now?', ok: 'Post now' })) act(r, 'publish', {}, 'Posted to Instagram'); } }, 'Post now'),
 	);
 
 	const copyBtn = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: async () => {
@@ -203,6 +203,7 @@ function renderDetail() {
 		head,
 		busy ? el('div', { class: 'progress' }, el('div', { class: 'spinner' }), r.progress || LABEL[r.status]) : null,
 		r.error ? el('div', { class: 'error' }, r.error) : null,
+		r.demoNote ? el('div', { class: 'note' }, r.demoNote) : null,
 		field('Posting time', when),
 		field('Hook', el('p', { class: 'hook' }, p.hook)),
 		field('Scenes', el('ol', { class: 'scenes' }, p.scenes.map((s, i) => {
@@ -217,10 +218,6 @@ function renderDetail() {
 		r.history?.length ? field('Change requests', el('ul', { style: 'margin:0;padding-left:18px' }, r.history.map((h) => el('li', {}, `${fmtDate(h.at)}: ${h.feedback}`)))) : null,
 		actions,
 	));
-}
-
-function confirmPost(r) {
-	return window.confirm(`Post "${r.plan.title}" to Instagram now?`);
 }
 
 async function act(r, action, body, okMsg) {
@@ -243,6 +240,7 @@ async function approve() {
 	try {
 		merge(await api(`/api/reels/${r.id}/approve`, { method: 'POST', body: { scheduledAt: new Date($('#sched')?.value || r.scheduledAt).toISOString() } }));
 		toast(`Approved: ${r.plan.title}`);
+		markDone('approve');
 		select(nextToReview(r.id));
 	} catch (e) { toast(e.message, true); }
 }
@@ -263,7 +261,7 @@ $('#fb-dialog').addEventListener('close', async () => {
 	const r = selected(); const feedback = $('#fb-text').value.trim();
 	if (!r || !feedback) { if (!feedback) toast('Write what should change first.', true); return; }
 	toast('Rewriting the reel…');
-	try { merge(await api(`/api/reels/${r.id}/revise`, { method: 'POST', body: { feedback } })); } catch (e) { toast(e.message, true); }
+	try { merge(await api(`/api/reels/${r.id}/revise`, { method: 'POST', body: { feedback } })); markDone('revise'); } catch (e) { toast(e.message, true); }
 	refresh();
 });
 
@@ -293,6 +291,7 @@ $('#brand-form').addEventListener('submit', async (e) => {
 		setBusy(btn, true, 'Writing the week…');
 		await api(`/api/brands/${brand.id}/week`, { method: 'POST', body: { count: Number(body.count), startDate: body.startDate } });
 		e.target.reset(); msg.textContent = '';
+		markDone('plan');
 		$('#f-start').value = isoDay(new Date(Date.now() + 86400000));
 		state.onboarding = false;
 		await refresh(true);
@@ -309,6 +308,7 @@ $('#more-form').addEventListener('submit', async (e) => {
 		setBusy(btn, true, 'Writing…');
 		await api(`/api/brands/${state.brandId}/week`, { method: 'POST', body: { count: Number($('#more-count').value), startDate: $('#more-start').value } });
 		toast('New reels planned. Rendering now.');
+		markDone('plan');
 		await refresh(true);
 	} catch (err) { toast(err.message, true); } finally { setBusy(btn, false, 'Plan more reels'); }
 });
@@ -332,10 +332,11 @@ function renderWatch() {
 	const st = state.status;
 	const hint = $('#w-hint');
 	const parts = [];
-	if (st?.watch) {
+	if (st?.mode === 'demo') {
+		parts.push('Demo: paste any link or upload any video to try the flow. You will get a sample analysis; the real studio downloads and analyses the actual reel.');
+	} else if (st?.watch) {
 		parts.push(st.watch.downloader
 			? `Links are downloaded with yt-dlp ${st.watch.downloader}. Instagram sometimes needs a login: set YTDLP_COOKIES_FROM_BROWSER in .env, or upload the file.`
-			: st.mode === 'demo' ? 'This demo shows reels watched earlier. Watching new links needs the studio running on your computer.'
 			: 'yt-dlp is not installed, so links cannot be downloaded yet (pip install yt-dlp). Uploading a video works.');
 		parts.push(`Up to ${Math.round(st.watch.maxSeconds / 60)} min per video.`);
 	}
@@ -391,6 +392,7 @@ function renderSourceStage() {
 function seek(t) {
 	const v = $('#w-video'); if (!v) return;
 	const go = () => { v.currentTime = t; v.play().catch(() => {}); };
+	markDone('beat');
 	if (v.readyState >= 1) go(); else { v.addEventListener('loadedmetadata', go, { once: true }); v.load(); }
 }
 
@@ -420,7 +422,7 @@ function renderSourceDetail() {
 	const actions = el('div', { class: 'actions' },
 		el('button', { class: 'btn btn-accent btn-sm', type: 'button', disabled: x.status !== 'ready', onclick: () => openRemake(x) }, 'Remake for my business'),
 		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: busy, onclick: () => sourceAct(x, 'watch', 'POST', 'Watching again') }, 'Watch again'),
-		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: x.status === 'watching', onclick: () => { if (confirm('Remove this reel from the library?')) sourceAct(x, '', 'DELETE', 'Removed'); } }, 'Remove'),
+		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: x.status === 'watching', onclick: async () => { if (await ask('Remove this reel from the library? Its frames and analysis are deleted.', { title: 'Remove reel?', ok: 'Remove' })) sourceAct(x, '', 'DELETE', 'Removed'); } }, 'Remove'),
 	);
 	if (!b) {
 		d.replaceChildren(...kids(head, busy ? el('div', { class: 'progress' }, el('div', { class: 'spinner' }), x.progress || SLABEL[x.status]) : null, x.error ? el('div', { class: 'error' }, x.error) : null, x.url ? field('Link', el('p', { class: 'mono' }, x.url)) : null, actions));
@@ -446,6 +448,7 @@ function renderSourceDetail() {
 		head,
 		busy ? el('div', { class: 'progress' }, el('div', { class: 'spinner' }), x.progress || SLABEL[x.status]) : null,
 		x.error ? el('div', { class: 'error' }, x.error) : null,
+		x.demoNote ? el('div', { class: 'note' }, x.demoNote) : null,
 		(x.warnings || []).map((w) => el('div', { class: 'note' }, w)),
 		b.summary ? el('p', { class: 'lede', style: 'margin:0' }, b.summary) : null,
 		el('div', { class: 'stats' },
@@ -491,6 +494,7 @@ $('#watch-form').addEventListener('submit', async (e) => {
 		$('#w-urls').value = '';
 		msg.textContent = `Watching ${out.added.length} reel${out.added.length === 1 ? '' : 's'}${out.skipped ? ` (${out.skipped} already in the library)` : ''}.`;
 		if (out.added[0]) state.sourceId = out.added[0].id;
+		markDone('watch');
 		await refresh();
 	} catch (err) { msg.textContent = err.message; msg.className = 'form-msg err'; } finally { setBusy(btn, false, 'Watch'); }
 });
@@ -503,6 +507,7 @@ $('#w-file').addEventListener('change', async (e) => {
 		const data = await res.json().catch(() => ({}));
 		if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
 		msg.textContent = `Watching ${file.name}.`;
+		markDone('watch');
 		state.sourceId = data.id;
 		await refresh();
 	} catch (err) { msg.textContent = err.message; msg.className = 'form-msg err'; }
@@ -516,6 +521,7 @@ $('#w-compare').addEventListener('click', async () => {
 		const p = await api('/api/patterns', { method: 'POST', body: { sourceIds: [...state.picked] } });
 		state.picked.clear(); state.profileId = p.id;
 		toast('Patterns found');
+		markDone('patterns');
 		await refresh();
 		$('#pat-head').scrollIntoView({ behavior: 'smooth', block: 'start' });
 	} catch (err) { toast(err.message, true); setBusy(btn, false); renderLibrary(); }
@@ -551,6 +557,7 @@ $('#remake-dialog').addEventListener('close', async () => {
 		state.brandId = brandId; state.selectedId = reel.id;
 		try { localStorage.setItem('ootto.brand', brandId); } catch {}
 		toast('Remake created. Rendering now.');
+		markDone('remake');
 		setTab('plan');
 		await refresh();
 		select(reel.id);
@@ -582,7 +589,7 @@ function renderProfiles() {
 				el('div', { class: 'actions' },
 					count,
 					el('button', { class: 'btn btn-accent btn-sm', type: 'button', onclick: (e) => planFromPatterns(pr, Number(count.value), e.currentTarget) }, 'Plan new reels from these patterns'),
-					el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: async () => { if (!confirm('Delete these patterns?')) return; try { await api(`/api/patterns/${pr.id}`, { method: 'DELETE' }); } catch (e) { toast(e.message, true); } refresh(); } }, 'Delete')),
+					el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: async () => { if (!(await ask('Delete these patterns?', { title: 'Delete patterns?', ok: 'Delete' }))) return; try { await api(`/api/patterns/${pr.id}`, { method: 'DELETE' }); } catch (e) { toast(e.message, true); } refresh(); } }, 'Delete')),
 			) : null,
 		);
 	}));
@@ -594,6 +601,7 @@ async function planFromPatterns(pr, count, btn) {
 		setBusy(btn, true, 'Writing…');
 		await api(`/api/brands/${state.brandId}/week`, { method: 'POST', body: { count, startDate: isoDay(new Date(Date.now() + 86400000)), profileId: pr.id } });
 		toast(`${count} new reels planned from “${pr.name}”. Rendering now.`);
+		markDone('fromPatterns');
 		setTab('plan');
 		await refresh(true);
 	} catch (e) { toast(e.message, true); setBusy(btn, false, 'Plan new reels from these patterns'); }
@@ -671,6 +679,16 @@ function renderSettings() {
 	const sum = (prefix) => Object.entries(c).filter(([k]) => k.startsWith(prefix)).reduce((n, [, v]) => n + v, 0);
 	const monthName = new Date(`${st.usage.month}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 	const lim = (id, label, value, hint) => el('label', { class: 'field' }, label, el('input', { id, type: 'number', min: '0', step: '1', inputmode: 'numeric', value: String(value), disabled: locked }), el('span', { class: 'hint' }, hint));
+	if (!$('#set-check-results')?.childElementCount) {
+		$('#set-check').replaceChildren(
+			el('h2', {}, 'System check'),
+			el('p', { class: 'hint' }, demo
+				? 'Checks what this browser can do here. On your computer, the same button renders a test clip and checks ffmpeg, your keys, yt-dlp and Instagram (also: npm run check).'
+				: 'Renders a test clip and checks ffmpeg, the data folder, yt-dlp, your keys and Instagram. Spends no credits. Same as npm run check.'),
+			el('div', { class: 'form-actions' }, el('button', { class: 'btn btn-accent btn-sm', type: 'button', onclick: (e) => runCheck(e.currentTarget) }, 'Run system check')),
+			el('div', { id: 'set-check-results' }),
+		);
+	}
 	$('#set-usage').replaceChildren(
 		el('h2', {}, 'Usage & limits'),
 		el('p', { class: 'hint' }, `${monthName}. Counts of paid calls made by this studio. Your bill comes from OpenAI and Anthropic.`),
@@ -715,10 +733,102 @@ function keyCard(svc, k, locked) {
 		el('div', { class: 'form-actions' },
 			el('button', { class: 'btn btn-accent btn-sm', type: 'button', disabled: locked, onclick: save }, 'Save key'),
 			el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: locked, onclick: test }, 'Test'),
-			k.source === 'studio' ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: locked, onclick: () => { if (confirm(`Remove the saved ${S.name} key?`)) saveSettings({ [svc === 'openai' ? 'clearOpenaiKey' : 'clearAnthropicKey']: true }, `${S.name} key removed`); } }, 'Remove') : null,
+			k.source === 'studio' ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', disabled: locked, onclick: async () => { if (await ask(`Remove the saved ${S.name} key from this computer?`, { title: 'Remove key?', ok: 'Remove' })) saveSettings({ [svc === 'openai' ? 'clearOpenaiKey' : 'clearAnthropicKey']: true }, `${S.name} key removed`); } }, 'Remove') : null,
 			el('a', { class: 'ext', href: S.keyUrl, target: '_blank', rel: 'noopener' }, 'Get a key')),
 		msg,
 	);
+}
+
+// ---------- in-page confirm (browser pop-ups can be blocked when the page is embedded) ----------
+function ask(text, { title = 'Are you sure?', ok = 'OK' } = {}) {
+	const d = $('#confirm-dialog');
+	$('#confirm-title').textContent = title; $('#confirm-text').textContent = text; $('#confirm-ok').textContent = ok;
+	d.returnValue = '';
+	d.showModal();
+	return new Promise((resolve) => d.addEventListener('close', () => resolve(d.returnValue === 'ok'), { once: true }));
+}
+
+// ---------- how to test: a checklist that ticks itself as each feature is used ----------
+const GUIDE = [
+	{ id: 'play', tab: 'plan', target: '#screen', title: 'Play a reel', how: 'In Plan & review, pick a reel from the week and press play.', proves: 'Rendered video plays in the phone preview.' },
+	{ id: 'approve', tab: 'plan', target: '#btn-approve', title: 'Approve a reel', how: 'Press ✓ or the → key on a reel that needs review.', proves: 'Review and scheduling work.' },
+	{ id: 'revise', tab: 'plan', target: '#btn-change', title: 'Request a change', how: 'Press ✕ or the ← key, pick a note, then Rewrite reel.', proves: 'The AI rewrites the script and the reel re-renders.' },
+	{ id: 'plan', tab: 'plan', target: '#more-form', title: 'Plan new reels', how: 'Press Plan more reels, or New brand at the top for your own business.', proves: 'Scripts are written and rendered for a brief.' },
+	{ id: 'watch', tab: 'watch', target: '#watch-form', title: 'Watch a reel', how: 'In Watch & remake, paste any reel link and press Watch, or upload a video.', proves: 'Download, cut detection, frames and analysis work.' },
+	{ id: 'beat', tab: 'watch', target: '#w-detail', title: 'Jump to a beat', how: 'Open a watched reel and click one of its beats.', proves: 'The breakdown lines up with the video.' },
+	{ id: 'remake', tab: 'watch', target: '#w-detail', title: 'Remake for your business', how: 'Press Remake for my business and choose Same format.', proves: 'A new reel is written with the original rhythm.' },
+	{ id: 'patterns', tab: 'watch', target: '#library', title: 'Find patterns', how: 'Tick Compare on two watched reels, then Find patterns.', proves: 'Several reels are compared for what they share.' },
+	{ id: 'fromPatterns', tab: 'watch', target: '#profiles', title: 'Plan from patterns', how: 'Open a pattern set and press Plan new reels from these patterns.', proves: 'Patterns steer new scripts.' },
+	{ id: 'check', tab: 'settings', target: '#set-check', title: 'Run the system check', how: 'In Settings, press Run system check.', proves: 'Shows whether ffmpeg, your keys, yt-dlp and Instagram work on your computer.' },
+];
+const guide = { done: new Set() };
+try { for (const id of JSON.parse(localStorage.getItem('ootto.guide') || '[]')) guide.done.add(id); } catch {}
+
+function markDone(id) {
+	if (guide.done.has(id)) return;
+	guide.done.add(id);
+	try { localStorage.setItem('ootto.guide', JSON.stringify([...guide.done])); } catch {}
+	const step = GUIDE.find((g) => g.id === id);
+	renderGuide();
+	if (step) toast(`✓ Tested: ${step.title} (${guide.done.size} of ${GUIDE.length})`);
+}
+
+function renderGuide() {
+	const n = GUIDE.filter((g) => guide.done.has(g.id)).length;
+	$('#guide-count').textContent = `${n}/${GUIDE.length}`;
+	$('#guide-fill').style.width = `${(n / GUIDE.length) * 100}%`;
+	const demo = state.status?.mode === 'demo';
+	$('#guide-sub').textContent = n === GUIDE.length
+		? 'Everything was tried and worked.'
+		: demo ? 'This online demo simulates the AI and rendering with sample videos. Try each step; it ticks itself when it works.'
+		: 'Try each step. It ticks itself when it works.';
+	$('#guide-steps').replaceChildren(...GUIDE.map((g) => el('li', { class: guide.done.has(g.id) ? 'done' : '' },
+		el('span', { class: 'tick', 'aria-hidden': 'true' }, guide.done.has(g.id) ? '✓' : ''),
+		el('div', {},
+			el('b', {}, g.title), guide.done.has(g.id) ? el('span', { class: 'sr' }, ' (done)') : null,
+			el('p', {}, g.how),
+			el('p', { class: 'hint' }, g.proves)),
+		el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => showStep(g) }, 'Show me'),
+	)));
+}
+
+function showStep(g) {
+	if (g.tab === 'plan' && state.onboarding) state.onboarding = false;
+	setTab(g.tab);
+	if (window.matchMedia('(max-width: 860px)').matches) toggleGuide(false);
+	setTimeout(() => {
+		const t = $(g.target); if (!t) return;
+		t.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		t.classList.remove('pulse'); void t.offsetWidth; t.classList.add('pulse');
+	}, 120);
+}
+
+function toggleGuide(open = $('#guide').hidden) {
+	$('#guide').hidden = !open;
+	$('#guide-btn').setAttribute('aria-expanded', String(open));
+	document.body.classList.toggle('guide-open', open);
+	try { localStorage.setItem('ootto.guideOpen', open ? '1' : '0'); } catch {}
+	if (open) renderGuide();
+}
+$('#guide-btn').addEventListener('click', () => toggleGuide());
+$('#guide-close').addEventListener('click', () => toggleGuide(false));
+$('#guide-reset').addEventListener('click', () => { guide.done.clear(); try { localStorage.removeItem('ootto.guide'); } catch {} renderGuide(); });
+
+// ---------- system check (Settings) ----------
+const CHECK_ICON = { ok: '✓', warn: '!', fail: '✗', skip: '–' };
+async function runCheck(btn) {
+	const box = $('#set-check-results');
+	setBusy(btn, true, 'Checking…');
+	box.replaceChildren(el('div', { class: 'progress' }, el('div', { class: 'spinner' }), 'Rendering a test clip and checking your keys…'));
+	try {
+		const r = await api('/api/selftest', { method: 'POST' });
+		box.replaceChildren(
+			el('p', { class: `check-sum ${r.ok ? 'ok' : 'bad'}` }, r.ok ? 'All required parts work.' : 'Something needs fixing (marked ✗).'),
+			el('ul', { class: 'checks' }, r.checks.map((c) => el('li', { class: `c-${c.status}` }, el('span', { class: 'ci', 'aria-hidden': 'true' }, CHECK_ICON[c.status]), el('div', {}, el('b', {}, c.label), el('span', {}, c.detail))))),
+		);
+		markDone('check');
+	} catch (e) { box.replaceChildren(el('div', { class: 'error' }, e.message)); }
+	setBusy(btn, false, 'Run system check');
 }
 
 // ---------- data loop ----------
@@ -742,11 +852,17 @@ async function refresh(pickFirst = false) {
 		try { if (state.brandId) localStorage.setItem('ootto.brand', state.brandId); } catch {}
 		renderStatus(); renderBrandPicker();
 		applyView();
+		renderGuide();
+		if (!guide.autoOpened) {
+			guide.autoOpened = true;
+			let pref = null; try { pref = localStorage.getItem('ootto.guideOpen'); } catch {}
+			if (pref === '1' || (pref === null && window.innerWidth > 1100)) toggleGuide(true);
+		}
 		renderWeek(); renderStage(); renderDetail();
 		if (state.tab === 'watch') renderWatch();
 	} catch (e) { toast(`Cannot reach the studio server: ${e.message}`, true); }
 	const working = state.reels.some((r) => BUSY.has(r.status)) || state.sources.some((x) => SBUSY.has(x.status));
-	pollTimer = setTimeout(() => refresh(), working ? 2500 : 15000);
+	pollTimer = setTimeout(() => refresh(), working ? (state.status?.mode === 'demo' ? 1000 : 2500) : 15000);
 }
 
 const t = new Date(Date.now() + 86400000);

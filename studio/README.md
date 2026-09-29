@@ -24,6 +24,11 @@ Then open **Settings** in the studio and paste an OpenAI key, a Claude key, or b
 
 With no key at all the studio runs in **mock mode**. It uses template scripts, placeholder images and silent voice, so you can try the whole flow at no cost. The header shows which mode is active; click it to open Settings.
 
+## Is it working?
+
+- **System check:** open Settings → **Run system check**, or run `npm run check`. It renders a test clip and checks the data folder, yt-dlp, your OpenAI and Claude keys (listing models only, so no credits are spent), your Instagram account and your public address. Each line says ok, warning, broken or not set up, and what to do.
+- **How to test:** the button at the bottom right opens a 10-step checklist covering every feature. Each step ticks itself when it works, and **Show me** jumps to the right place.
+
 ## OpenAI, Claude, or both
 
 | Job | OpenAI key | Claude key only | Both keys |
@@ -136,6 +141,7 @@ src/measure.js     cuts, key frames, speech track, caption parsing (ffmpeg)
 src/analyze.js     beat-by-beat breakdown and patterns across reels
 src/remake.js      format and exact remakes
 src/watch.js       the watch pipeline: download, measure, transcribe, analyse
+src/selftest.js    system check (Settings → System check, npm run check)
 src/store.js       JSON file store (data/db.json, data/media/<reel>/)
 public/            the studio web page
 assets/fonts/      DejaVu Sans for burned-in captions (see DejaVu-LICENSE.txt)
@@ -144,7 +150,7 @@ test/              tests against stand-in OpenAI and Instagram servers
 
 ## Static demo
 
-`npm run demo:build` renders a sample week with the real pipeline in mock mode and writes `demo-dist/`: one self-contained page plus the videos. It also watches three of those reels back in, finds their patterns, and makes a remake and a reel planned from the patterns. Mock mode cannot read video, so the demo fills the watched reels' text and speech from their own scripts; cuts, frames and pacing are measured. A small in-page stand-in answers the studio's requests, so the demo runs with no server. It adds WebM copies of the videos for browsers without H.264; the MP4 stays what Instagram gets.
+`npm run demo:build` renders a sample week with the real pipeline in mock mode and writes `demo-dist/`: one self-contained page plus the videos. It also watches three of those reels back in, finds their patterns, and makes a remake and a reel planned from the patterns. Mock mode cannot read video, so the demo fills the watched reels' text and speech from their own scripts; cuts, frames and pacing are measured. In the demo page every flow works as a labelled simulation (new plans, watched links and remakes reuse the sample videos and analyses); no AI is called and no keys can be entered. A small in-page stand-in answers the studio's requests, so the demo runs with no server. It adds WebM copies of the videos for browsers without H.264; the MP4 stays what Instagram gets.
 
 ## Tests
 
@@ -159,6 +165,7 @@ The tests never call the real OpenAI or Instagram. They run the real code agains
 - **Reliability:** caching, retries and error messages.
 - **Posting:** Instagram's upload, wait and publish sequence.
 - **Whole flow:** the full API in mock mode.
+- **System check:** every check's ok/warn/fail/skip result against stand-in OpenAI, Claude and Instagram servers, read-only calls only, and the API route.
 - **Claude:** request headers and body, forced tool output, image blocks, retries on 529, clear errors (bad key, max_tokens, refusal), OpenAI/Claude routing, and a full Claude-only reel.
 - **Settings:** keys saved only on disk and masked in every response, live provider switching, key tests, remote edits refused without a password, the password gate, usage counts and monthly caps.
 - **Watching:** cut detection and key frames on a real test video, caption parsing, a stand-in yt-dlp (arguments, login errors, missing install), the vision and transcription requests, remakes that keep the original timing, and patterns across reels.
