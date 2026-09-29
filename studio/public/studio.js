@@ -45,7 +45,8 @@ function renderStatus() {
 	const s = state.status; const box = $('#status'); box.replaceChildren();
 	if (!s) return;
 	const live = s.mode === 'openai';
-	box.append(el('span', { class: `pill ${live ? 'ok' : 'warn'}`, title: live ? `Script: ${s.models.text} · Images: ${s.models.image} · Voice: ${s.models.voice}` : 'No OPENAI_API_KEY set: placeholder images and silent voice' }, live ? 'OpenAI connected' : 'Mock mode'));
+	const label = live ? 'OpenAI connected' : s.mode === 'demo' ? 'Demo data' : 'Mock mode';
+	box.append(el('span', { class: `pill ${live ? 'ok' : 'warn'}`, title: live ? `Script: ${s.models.text} · Images: ${s.models.image} · Voice: ${s.models.voice}` : 'No OPENAI_API_KEY set: placeholder images and silent voice' }, label));
 	box.append(el('span', { class: `pill ${s.instagram.connected ? 'ok' : 'off'}`, title: s.instagram.connected ? `Posting as account ${s.instagram.userId}` : 'Set IG_USER_ID, IG_ACCESS_TOKEN and PUBLIC_BASE_URL to post automatically' }, s.instagram.connected ? 'Instagram connected' : 'Instagram not connected'));
 }
 
@@ -120,7 +121,10 @@ function renderStage() {
 	if (r.videoUrl && !BUSY.has(r.status)) {
 		if (shownVideo === r.videoUrl) return;
 		shownVideo = r.videoUrl;
-		screen.replaceChildren(el('video', { src: r.videoUrl, poster: r.thumbUrl, controls: true, playsinline: true, loop: true, preload: 'metadata', 'aria-label': `Preview of ${r.plan.title}` }));
+		// MP4 (H.264, what Instagram gets) first; an optional WebM copy for browsers without H.264.
+		screen.replaceChildren(el('video', { poster: r.thumbUrl, controls: true, playsinline: true, loop: true, preload: 'metadata', 'aria-label': `Preview of ${r.plan.title}` },
+			el('source', { src: r.videoUrl, type: 'video/mp4' }),
+			r.videoWebmUrl ? el('source', { src: r.videoWebmUrl, type: 'video/webm' }) : null));
 		return;
 	}
 	shownVideo = null;

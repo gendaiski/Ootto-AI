@@ -74,6 +74,10 @@ assets/fonts/      DejaVu Sans for burned-in captions (see DejaVu-LICENSE.txt)
 test/              tests against stand-in OpenAI and Instagram servers
 ```
 
+## Static demo
+
+`npm run demo:build` renders a sample week with the real pipeline in mock mode and writes `demo-dist/`: one self-contained page plus the videos. A small in-page stand-in answers the studio's requests, so the demo runs with no server. It adds WebM copies of the videos for browsers without H.264; the MP4 stays what Instagram gets.
+
 ## Tests
 
 ```

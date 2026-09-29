@@ -4,11 +4,14 @@
   "private": true,
   "description": "Ootto Studio: plan, generate, review and post a week of Instagram reels with OpenAI",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test --test-concurrency=1 test/*.test.js"
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "demo:build": "node scripts/build-demo.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",
