@@ -21,6 +21,8 @@
 	// Work interrupted by a reload finishes straight away.
 	for (const r of db.reels) if (['queued', 'rendering'].includes(r.status)) { r.status = 'ready'; r.progress = ''; }
 	for (const x of db.sources) if (['queued', 'watching'].includes(x.status)) Object.assign(x, finishedSource(x));
+	for (const r of db.reels) if (r.status === 'ready' && r.autoApprove) r.status = 'approved';
+	for (const x of db.sources) if (x.auto && x.status === 'ready' && !x.auto.reelId) runChain(x);
 
 	const rid = (p) => `${p}_demo_${Math.random().toString(16).slice(2, 10)}`;
 	const captionText = (p) => [p.caption, (p.hashtags || []).map((h) => `#${h}`).join(' ')].filter(Boolean).join('\n\n');
@@ -104,8 +106,48 @@
 			videoUrl: template.videoUrl, videoWebmUrl: template.videoWebmUrl, thumbUrl: template.thumbUrl, demoNote: NOTE_REEL, ...extra,
 		};
 		db.reels.push(r);
-		simulate(r, RENDER_STEPS, 'rendering', () => { r.status = 'ready'; });
+		simulate(r, RENDER_STEPS, 'rendering', () => { r.status = r.autoApprove ? 'approved' : 'ready'; });
 		return r;
+	}
+
+	// ---------- runs: link or upload -> watched -> new reel -> rendered (simulated) ----------
+	const RUN_STEPS = [['get', 'Get the video'], ['watch', 'Find cuts and key frames'], ['listen', 'Listen to the speech'], ['analyse', 'Analyse hook, beats and pacing'], ['script', 'Write your version'], ['render', 'Make images, voice and video'], ['review', 'Ready for review']];
+	const AI_NAME = { openai: 'OpenAI', anthropic: 'Claude', auto: 'Default AI' };
+	function runChain(x) {
+		const a = x.auto;
+		if (!a || a.reelId) return;
+		a.stage = 'script'; save();
+		setTimeout(() => {
+			const brand = db.brands.find((b) => b.id === a.brandId) || db.brands[0];
+			const r = newReel(brand, remakePlanFor(brand, x, a.mode), REMAKE, { scheduledAt: a.scheduledAt || at(tomorrow(), 0, '18:00'), autoApprove: a.autoApprove, origin: { type: 'remake', mode: a.mode, sourceId: x.id, label: x.label, run: true } });
+			a.reelId = r.id; a.stage = 'render'; save();
+		}, 1200);
+	}
+	function runView(x) {
+		const a = x.auto;
+		const reel = a.reelId ? db.reels.find((r) => r.id === a.reelId) : null;
+		const p = x.progress || '';
+		let i = 0, st = 'active', progress = p;
+		if (x.status !== 'ready') i = /cuts|frames/i.test(p) ? 1 : /Listen/i.test(p) ? 2 : /Analys/i.test(p) ? 3 : 0;
+		else if (!reel) { i = 4; progress = 'Writing your version'; }
+		else if (['queued', 'rendering'].includes(reel.status)) { i = 5; progress = reel.progress || 'Rendering'; }
+		else if (reel.status === 'ready') { i = 6; progress = 'Ready for your review'; }
+		else { i = 7; st = 'done'; progress = 'Approved and scheduled'; }
+		if (!x.url && i === 0) i = 1;
+		return {
+			id: x.id, label: x.label, url: x.url, createdAt: x.createdAt, thumbUrl: x.thumbUrl || null,
+			ai: a.ai, aiName: AI_NAME[a.ai] || AI_NAME.auto, mode: a.mode, brandId: a.brandId, brandName: db.brands.find((b) => b.id === a.brandId)?.name || '', autoApprove: Boolean(a.autoApprove),
+			steps: RUN_STEPS.map(([id, label], k) => ({ id, label: id === 'get' ? (x.url ? 'Download the reel' : 'Upload the video') : id === 'review' && i >= 7 ? 'Approved and scheduled' : label, state: k < i ? 'done' : k === i ? st : 'todo' })),
+			state: i >= 7 ? 'done' : i === 6 ? 'review' : 'working', progress, error: null,
+			beats: x.breakdown?.pacing?.beats || null, seconds: x.video?.duration || null, reel: reel ? view(reel) : null,
+		};
+	}
+	function runOptions(o) {
+		const brand = db.brands.find((b) => b.id === o.brandId);
+		if (!brand) return { error: 'Pick your business first, or add one.' };
+		const mode = o.mode === 'exact' ? 'exact' : 'format';
+		if (mode === 'exact' && !o.rightsConfirmed) return { error: 'An exact remake reuses the original words. Confirm that this is your own reel or that you have the rights to reuse it.' };
+		return { brandId: brand.id, mode, ai: ['openai', 'anthropic'].includes(o.ai) ? o.ai : 'auto', autoApprove: Boolean(o.autoApprove), scheduledAt: o.scheduledAt || null, stage: 'watch', reelId: null };
 	}
 
 	function patternsFrom(sources, name) {
@@ -154,7 +196,7 @@
 		const brandOf = (id) => db.brands.find((b) => b.id === id);
 
 		if (url.pathname === '/api/status') {
-			return json({ mode: 'demo', models: { text: 'demo', vision: 'demo', image: 'demo', voice: 'demo', transcribe: 'demo' }, providers: { text: 'mock', vision: 'mock', image: 'mock', voice: 'mock', transcribe: 'captions' }, instagram: { connected: false, userId: null, publicBaseUrl: null }, watch: { downloader: 'demo', maxSeconds: 600, uploadLimitMb: 300 }, queue: 0, watchQueue: 0 });
+			return json({ mode: 'demo', models: { text: 'demo', vision: 'demo', image: 'demo', voice: 'demo', transcribe: 'demo' }, providers: { text: 'mock', vision: 'mock', image: 'mock', voice: 'mock', transcribe: 'captions' }, instagram: { connected: false, userId: null, publicBaseUrl: null }, ai: { openai: true, anthropic: true }, watch: { downloader: 'demo', maxSeconds: 600, uploadLimitMb: 300 }, queue: 0, watchQueue: 0 });
 		}
 		if (url.pathname === '/api/selftest') return json(browserCheck());
 
@@ -192,6 +234,33 @@
 			});
 			save();
 			return json(made.map(view), 201);
+		}
+
+		// ---------- runs ----------
+		if (parts[1] === 'runs') {
+			if (method === 'GET' && !parts[2]) return json(db.sources.filter((x) => x.auto).map(runView));
+			if (method === 'GET') { const x = db.sources.find((v) => v.id === parts[2] && v.auto); return x ? json(runView(x)) : fail('Run not found.', 404); }
+			if (parts[3] === 'retry') { const x = db.sources.find((v) => v.id === parts[2] && v.auto); if (!x) return fail('Run not found.', 404); watchSim(x); return json(runView(x)); }
+			const isUpload = parts[2] === 'upload';
+			const q = url.searchParams;
+			const auto = runOptions(isUpload ? { brandId: q.get('brandId'), mode: q.get('mode'), rightsConfirmed: q.get('rightsConfirmed') === '1', ai: q.get('ai'), autoApprove: q.get('autoApprove') === '1', scheduledAt: q.get('scheduledAt') } : body);
+			if (auto.error) return fail(auto.error);
+			let x;
+			if (isUpload) {
+				const name = q.get('name') || 'upload.mp4';
+				x = { id: rid('src'), url: null, name, label: name.replace(/\.[^.]+$/, ''), meta: { url: null, platform: 'Upload', title: name.replace(/\.[^.]+$/, ''), uploader: null, caption: null, views: null, likes: null, comments: null }, frames: [], cuts: [], createdAt: new Date().toISOString(), auto };
+			} else {
+				const link = String(body.url || '').trim();
+				if (!link) return fail('Paste a reel link, or upload the video instead.');
+				if (!/^https?:\/\/[^\s]+\.[^\s]+/.test(link)) return fail('That is not a valid link. Copy the reel link from Instagram (Share → Copy link).');
+				const known = db.sources.find((v) => v.url === link);
+				if (known && known.status === 'ready') { known.auto = auto; runChain(known); save(); return json(runView(known), 201); }
+				x = known || { id: rid('src'), url: link, name: link, label: shortUrl(link), meta: { url: link, platform: platformOf(link), title: null, uploader: null, caption: null, views: null, likes: null, comments: null }, frames: [], cuts: [], createdAt: new Date().toISOString() };
+				x.auto = auto;
+			}
+			db.sources = [x, ...db.sources.filter((v) => v !== x)];
+			watchSim(x);
+			return json(runView(x), 201);
 		}
 
 		// ---------- watch & remake ----------
@@ -286,7 +355,7 @@
 
 	function watchSim(x) {
 		Object.assign(x, { status: 'queued', error: null });
-		simulate(x, ['Downloading the reel', 'Finding the cuts', 'Taking key frames', 'Listening to the audio', 'Analysing hook, structure and pacing'], 'watching', () => Object.assign(x, finishedSource(x)));
+		simulate(x, ['Downloading the reel', 'Finding the cuts', 'Taking key frames', 'Listening to the audio', 'Analysing hook, structure and pacing'], 'watching', () => { Object.assign(x, finishedSource(x)); if (x.auto) runChain(x); });
 	}
 
 	document.addEventListener('DOMContentLoaded', () => {
@@ -297,7 +366,7 @@
 		const bar = document.createElement('div');
 		bar.className = 'demo-bar';
 		bar.innerHTML = '<div class="wrap"><b>DEMO</b><span></span></div>';
-		bar.querySelector('span').textContent = 'Everything here works, but it is simulated in your browser: new plans, watched links and remakes reuse sample videos and a sample analysis, and no AI is called. Use How to test (bottom right) to try each feature. For real AI output, run the studio on your computer with your OpenAI or Claude key.';
+		bar.querySelector('span').textContent = 'Start on the Start tab: paste any reel link or upload a video and press Start to watch every step run. In this online demo it is simulated with sample videos and no AI is called. How to test (bottom right) walks you through each feature. For real output, run the studio on your computer with your OpenAI or Claude key.';
 		document.body.prepend(bar);
 	});
 })();

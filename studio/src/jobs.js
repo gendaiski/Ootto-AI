@@ -1,5 +1,6 @@
 // Background work: a single-worker render queue, a single-worker watch queue (downloading and
-// analysing reels) and the posting scheduler.
+// analysing reels) and the posting scheduler. A run (source.auto) chains them: when a watched
+// reel is ready, onWatched() writes the new reel and queues its render.
 import path from 'node:path';
 import { renderReel } from './render.js';
 import { watchSource } from './watch.js';
@@ -7,8 +8,10 @@ import { publishReel, captionFor } from './instagram.js';
 import { instagramReady } from './config.js';
 
 export class Jobs {
-	constructor({ store, provider, cfg, log = console }) {
-		Object.assign(this, { store, provider, cfg, log });
+	// providerFor(ai): the provider for a run that asked for a specific AI (or null for the default).
+	// onWatched(id): called when a run's reel has been watched.
+	constructor({ store, provider, cfg, log = console, providerFor = () => null, onWatched = null }) {
+		Object.assign(this, { store, provider, cfg, log, providerFor, onWatched });
 		this.queue = [];
 		this.running = false;
 		this.publishing = new Set();
@@ -22,7 +25,19 @@ export class Jobs {
 			if (r.status === 'rendering' || r.status === 'queued') this.enqueueRender(r.id);
 			if (r.status === 'posting') this.store.updateReel(r.id, { status: 'approved', progress: '' });
 		}
-		for (const s of this.store.sources()) if (s.status === 'queued' || s.status === 'watching') this.enqueueWatch(s.id);
+		for (const s of this.store.sources()) {
+			if (s.status === 'queued' || s.status === 'watching') this.enqueueWatch(s.id);
+			else if (s.status === 'ready' && s.auto && !s.auto.reelId && s.auto.stage !== 'failed') this.afterWatch(s.id);
+		}
+	}
+
+	afterWatch(id) {
+		if (!this.onWatched) return;
+		Promise.resolve(this.onWatched(id)).catch((e) => {
+			this.log.error(`[run ${id}]`, e.message);
+			const s = this.store.source(id);
+			if (s?.auto) this.store.updateSource(id, { auto: { ...s.auto, stage: 'failed', error: e.message } });
+		});
 	}
 
 	enqueueWatch(id) {
@@ -42,14 +57,18 @@ export class Jobs {
 				this.store.updateSource(id, { status: 'watching', progress: 'Starting' });
 				try {
 					const result = await watchSource({
-						source, dir: this.store.reelDir(id), provider: this.provider, cfg: this.cfg,
+						source, dir: this.store.reelDir(id), provider: this.providerFor(source.auto?.ai) || this.provider, cfg: this.cfg,
 						onProgress: (m) => this.store.updateSource(id, { progress: m }),
 					});
 					this.store.bumpUsage('watched');
-					if (this.store.source(id)) this.store.updateSource(id, { ...result, status: 'ready', progress: '', error: null });
+					if (this.store.source(id)) {
+						this.store.updateSource(id, { ...result, status: 'ready', progress: '', error: null });
+						if (source.auto && !source.auto.reelId) this.afterWatch(id);
+					}
 				} catch (e) {
 					this.log.error(`[watch ${id}]`, e.message);
-					if (this.store.source(id)) this.store.updateSource(id, { status: 'failed', progress: '', error: e.message });
+					const s = this.store.source(id);
+					if (s) this.store.updateSource(id, { status: 'failed', progress: '', error: e.message, ...(s.auto && { auto: { ...s.auto, stage: 'failed', error: e.message } }) });
 				}
 			}
 		} finally {
@@ -78,8 +97,8 @@ export class Jobs {
 						onProgress: (m) => this.store.updateReel(id, { progress: m }),
 					});
 					this.store.bumpUsage('rendered');
-					const keepApproved = reel.approvedFor === JSON.stringify(reel.plan);
-					this.store.updateReel(id, { status: keepApproved ? 'approved' : 'ready', media, progress: '', error: null });
+					const keepApproved = reel.approvedFor === JSON.stringify(reel.plan) || (reel.autoApprove && !reel.history?.length);
+					this.store.updateReel(id, { status: keepApproved ? 'approved' : 'ready', ...(keepApproved && { approvedFor: JSON.stringify(reel.plan) }), media, progress: '', error: null });
 				} catch (e) {
 					this.log.error(`[render ${id}]`, e.message);
 					this.store.updateReel(id, { status: 'failed', progress: '', error: e.message });

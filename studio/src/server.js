@@ -55,7 +55,14 @@ export function createApp(cfg = getConfig(), { provider: override = null, log = 
 	const settings = new Settings(cfg.dataDir);
 	const build = () => meter(override || createProvider(settings.apply(cfg)), store, () => settings.limits());
 	const provider = swappable(build());
-	const jobs = new Jobs({ store, provider, cfg, log });
+	// A run can ask for OpenAI or Claude for its analysis and script, whatever the Settings default.
+	const providerFor = (ai) => {
+		if (override || !['openai', 'anthropic'].includes(ai)) return null;
+		const eff = settings.apply(cfg);
+		if (eff.mock) return null;
+		return meter(createProvider({ ...eff, ai: { text: ai, vision: ai } }), store, () => settings.limits());
+	};
+	const jobs = new Jobs({ store, provider, cfg, log, providerFor, onWatched: (id) => writeRunReel(id) });
 	const app = express();
 
 	// Optional password (HTTP Basic, any user name). /media stays open because Instagram downloads
@@ -83,6 +90,7 @@ export function createApp(cfg = getConfig(), { provider: override = null, log = 
 		mode: provider.mode,
 		providers: provider.parts,
 		models: provider.models,
+		ai: (({ openai, anthropic }) => ({ openai: Boolean(openai.apiKey), anthropic: Boolean(anthropic.apiKey) }))(settings.apply(cfg)),
 		instagram: { connected: instagramReady(cfg), userId: cfg.instagram.userId ? `…${cfg.instagram.userId.slice(-4)}` : null, publicBaseUrl: cfg.instagram.publicBaseUrl || null },
 		watch: { downloader: await downloaderVersion(cfg.watch), maxSeconds: cfg.watch.maxSeconds, uploadLimitMb: cfg.watch.uploadLimitMb },
 		queue: jobs.queue.length + (jobs.running ? 1 : 0),
@@ -340,6 +348,137 @@ export function createApp(cfg = getConfig(), { provider: override = null, log = 
 		if (!store.profile(req.params.id)) throw bad('Patterns not found.', 404);
 		store.removeProfile(req.params.id);
 		res.json({ ok: true });
+	}));
+
+	// ---------- runs: one start point, link or upload -> watched -> new reel -> rendered ----------
+	const RUN_STEPS = [
+		['get', 'Get the video'], ['watch', 'Find cuts and key frames'], ['listen', 'Listen to the speech'], ['analyse', 'Analyse hook, beats and pacing'],
+		['script', 'Write your version'], ['render', 'Make images, voice and video'], ['review', 'Ready for review'],
+	];
+	const AI_NAME = { openai: 'OpenAI', anthropic: 'Claude', auto: 'Default AI' };
+
+	// Runs after the reel is watched: write the new reel and queue its render.
+	async function writeRunReel(id) {
+		const src = store.source(id);
+		if (!src?.auto || src.auto.reelId) return;
+		const brand = store.brand(src.auto.brandId);
+		if (!brand) throw new Error('The business for this run no longer exists.');
+		store.updateSource(id, { auto: { ...src.auto, stage: 'script', error: null } });
+		const plan = src.auto.mode === 'exact' ? exactPlan(src) : await remakePlan(providerFor(src.auto.ai) || provider, brand, src);
+		const reel = store.addReel({
+			id: Store.id('reel'), brandId: brand.id, day: 0, plan, status: 'queued', progress: 'Waiting to render',
+			scheduledAt: src.auto.scheduledAt || scheduleFor(tomorrow(), 0, plan.best_time), history: [], createdAt: new Date().toISOString(),
+			origin: { type: 'remake', mode: src.auto.mode, sourceId: id, label: sourceLabel(src), run: true },
+			autoApprove: Boolean(src.auto.autoApprove),
+		});
+		store.updateSource(id, { auto: { ...store.source(id).auto, stage: 'render', reelId: reel.id } });
+		jobs.enqueueRender(reel.id);
+	}
+
+	const stepIndex = (x) => {
+		const p = x.progress || '';
+		if (/Download|Starting|Waiting/i.test(p)) return 0;
+		if (/cuts|frames/i.test(p)) return 1;
+		if (/Listen/i.test(p)) return 2;
+		if (/Analys|Measur/i.test(p)) return 3;
+		return 0;
+	};
+	const runView = (x) => {
+		const a = x.auto;
+		const reel = a.reelId ? store.reel(a.reelId) : null;
+		let at = 0, state = 'active', progress = x.progress || '';
+		if (x.status === 'failed') { at = x.frames?.length ? 3 : x.file ? 1 : 0; state = 'failed'; }
+		else if (x.status !== 'ready') { at = stepIndex(x); }
+		else if (!reel) { at = 4; state = a.stage === 'failed' ? 'failed' : 'active'; progress = a.stage === 'failed' ? '' : 'Writing your version'; }
+		else if (['queued', 'rendering'].includes(reel.status)) { at = 5; progress = reel.progress || 'Rendering'; }
+		else if (reel.status === 'failed') { at = 5; state = 'failed'; }
+		else if (reel.status === 'ready') { at = 6; progress = 'Ready for your review'; }
+		else { at = 7; state = 'done'; progress = reel.status === 'posted' ? 'Posted to Instagram' : reel.status === 'posting' ? 'Posting' : 'Approved and scheduled'; }
+		if (!x.url && at === 0 && state !== 'failed') at = 1;
+		const steps = RUN_STEPS.map(([id, label], i) => ({
+			id, label: id === 'get' ? (x.url ? 'Download the reel' : 'Upload the video') : id === 'review' && reel && ['approved', 'posting', 'posted'].includes(reel.status) ? (reel.status === 'posted' ? 'Posted' : 'Approved and scheduled') : label,
+			state: i < at ? 'done' : i === at ? state : 'todo',
+		}));
+		return {
+			id: x.id, label: sourceLabel(x), url: x.url, createdAt: x.createdAt, thumbUrl: x.frames?.[0] ? `/media/${x.id}/${x.frames[0].file}` : null,
+			ai: a.ai, aiName: AI_NAME[a.ai] || AI_NAME.auto, mode: a.mode, brandId: a.brandId, brandName: store.brand(a.brandId)?.name || '', autoApprove: Boolean(a.autoApprove),
+			steps, state: state === 'failed' ? 'failed' : at >= 7 ? 'done' : at === 6 ? 'review' : 'working', progress,
+			error: x.status === 'failed' ? x.error : a.stage === 'failed' ? a.error : reel?.status === 'failed' ? reel.error : null,
+			beats: x.breakdown?.pacing?.beats || null, seconds: x.video?.duration || null,
+			reel: reel ? view(reel) : null,
+		};
+	};
+
+	// Checks shared by link and upload runs. Returns the run options.
+	const runOptions = (o) => {
+		const brand = store.brand(o.brandId);
+		if (!brand) throw bad('Pick your business first, or add one.');
+		const mode = o.mode === 'exact' ? 'exact' : 'format';
+		if (mode === 'exact' && o.rightsConfirmed !== true) throw bad('An exact remake reuses the original words. Confirm that this is your own reel or that you have the rights to reuse it.');
+		const ai = ['openai', 'anthropic'].includes(o.ai) ? o.ai : 'auto';
+		const eff = settings.apply(cfg);
+		if (!eff.mock && ai !== 'auto' && !eff[ai].apiKey) throw bad(`Add a ${AI_NAME[ai]} key in Settings first, or choose the other AI.`);
+		const scheduledAt = o.scheduledAt && !Number.isNaN(Date.parse(o.scheduledAt)) ? new Date(o.scheduledAt).toISOString() : null;
+		return { brandId: brand.id, mode, rightsConfirmed: mode === 'exact', ai, autoApprove: Boolean(o.autoApprove), scheduledAt, stage: 'watch', reelId: null, error: null };
+	};
+
+	app.get('/api/runs', (req, res) => res.json(store.sources().filter((x) => x.auto).map(runView)));
+	app.get('/api/runs/:id', wrap(async (req, res) => {
+		const x = store.source(req.params.id);
+		if (!x?.auto) throw bad('Run not found.', 404);
+		res.json(runView(x));
+	}));
+
+	// Body: { url, brandId, mode, rightsConfirmed, ai, autoApprove, scheduledAt }
+	app.post('/api/runs', wrap(async (req, res) => {
+		const b = req.body || {};
+		const url = String(b.url || '').trim();
+		if (!url) throw bad('Paste a reel link, or upload the video instead.');
+		if (!isHttpUrl(url)) throw bad('That is not a valid link. Copy the reel link from Instagram (Share → Copy link).');
+		const auto = runOptions(b);
+		const known = store.sources().find((x) => x.url === url);
+		if (known && ['queued', 'watching'].includes(known.status) && known.auto && !known.auto.reelId) throw bad('This reel is already being processed.');
+		let x;
+		if (known && known.status === 'ready') {
+			// Already watched: go straight to writing the new reel.
+			x = store.updateSource(known.id, { auto });
+			jobs.afterWatch(x.id);
+		} else if (known) {
+			x = store.updateSource(known.id, { auto });
+			if (!['queued', 'watching'].includes(known.status)) { checkWatchLimit(1); jobs.enqueueWatch(x.id); }
+		} else {
+			checkWatchLimit(1);
+			x = newSource({ url, name: url, auto });
+			jobs.enqueueWatch(x.id);
+		}
+		res.status(201).json(runView(store.source(x.id)));
+	}));
+
+	// Raw video bytes; options in the query string (name, brandId, mode, rightsConfirmed=1, ai, autoApprove=1, scheduledAt).
+	app.post('/api/runs/upload', express.raw({ type: () => true, limit: `${cfg.watch.uploadLimitMb}mb` }), wrap(async (req, res) => {
+		if (!Buffer.isBuffer(req.body) || req.body.length < 1000) throw bad('Choose a video file to upload.');
+		const q = req.query;
+		const auto = runOptions({ brandId: q.brandId, mode: q.mode, rightsConfirmed: q.rightsConfirmed === '1', ai: q.ai, autoApprove: q.autoApprove === '1', scheduledAt: q.scheduledAt });
+		checkWatchLimit(1);
+		const name = String(q.name || 'upload.mp4').slice(0, 120);
+		const x = newSource({ url: null, name, auto, meta: { url: null, platform: 'Upload', title: name.replace(/\.[^.]+$/, ''), uploader: null, caption: null, views: null, likes: null, comments: null, uploadDate: null } });
+		const file = uploadTarget(name);
+		fs.writeFileSync(path.join(store.reelDir(x.id), file), req.body);
+		store.updateSource(x.id, { file });
+		jobs.enqueueWatch(x.id);
+		res.status(201).json(runView(store.source(x.id)));
+	}));
+
+	// Try a failed run again from where it stopped.
+	app.post('/api/runs/:id/retry', wrap(async (req, res) => {
+		const x = store.source(req.params.id);
+		if (!x?.auto) throw bad('Run not found.', 404);
+		const reel = x.auto.reelId ? store.reel(x.auto.reelId) : null;
+		if (x.status === 'failed') { store.updateSource(x.id, { auto: { ...x.auto, stage: 'watch', error: null } }); jobs.enqueueWatch(x.id); }
+		else if (!reel) { store.updateSource(x.id, { auto: { ...x.auto, stage: 'script', error: null } }); jobs.afterWatch(x.id); }
+		else if (reel.status === 'failed') jobs.enqueueRender(reel.id);
+		else throw bad('This run has not failed.');
+		res.json(runView(store.source(x.id)));
 	}));
 
 	app.use('/media', express.static(store.mediaDir, { fallthrough: false, maxAge: '1h' }));

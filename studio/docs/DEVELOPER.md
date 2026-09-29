@@ -37,6 +37,14 @@ test/              node:test suites with stand-in OpenAI, Claude, Instagram and 
 
 ## Request flows
 
+### Runs: the Start tab
+`POST /api/runs` (a link) or `POST /api/runs/upload` (raw bytes, options in the query string) creates a watched-reel source with `auto: { brandId, mode, rightsConfirmed, ai, autoApprove, scheduledAt, stage, reelId }` and queues it.
+1. The watch queue processes it like any other source, using `providerFor(auto.ai)`, a provider pinned to OpenAI or Claude for this run.
+2. When watching finishes, `Jobs.afterWatch()` calls the server's `writeRunReel()`. That writes the remake (`remakePlan` with the same pinned provider, or `exactPlan`), creates the reel with `origin.run` and `autoApprove`, and queues the render.
+3. After rendering, an `autoApprove` reel becomes `approved` at its `scheduledAt`, and the scheduler posts it when Instagram is connected.
+
+`runView()` turns the source and its reel into seven steps (`get`, `watch`, `listen`, `analyse`, `script`, `render`, `review`), each `done`, `active`, `failed` or `todo`, plus an overall state (`working`, `review`, `done`, `failed`). `POST /api/runs/:id/retry` resumes from the step that failed. Posting a link that is already watched skips the download. Runs interrupted by a restart continue in `Jobs.resume()`.
+
 ### Plan a week
 1. `POST /api/brands` stores the brief. If a website is given, `brief.js` fetches it once (max 1.5 MB) and keeps the text for facts.
 2. `POST /api/brands/:id/week` calls `planWeek()` with `WEEK_SCHEMA`. Patterns from watched reels (`profileId`) are added to the prompt by `profileBlock()`.
@@ -157,6 +165,11 @@ All JSON. Errors are `{ "error": "message" }` with a 4xx/5xx status. With `STUDI
 | POST | `/api/reels/:id/render` | `{ regenerateMedia? }` | reel |
 | POST | `/api/reels/:id/publish` | | reel (posted) |
 | GET | `/api/reels/:id/download` | | MP4 file |
+| GET | `/api/runs` | | runs (newest first) with steps, state, progress, error, reel |
+| GET | `/api/runs/:id` | | one run |
+| POST | `/api/runs` | `{ url, brandId, mode: format\|exact, rightsConfirmed?, ai: openai\|anthropic\|auto, autoApprove?, scheduledAt? }` | run (201) |
+| POST | `/api/runs/upload?name=&brandId=&mode=&rightsConfirmed=1&ai=&autoApprove=1&scheduledAt=` | raw video bytes | run (201) |
+| POST | `/api/runs/:id/retry` | | run |
 | GET | `/api/sources` | | watched reels (with frame URLs) |
 | GET | `/api/sources/:id` | | watched reel |
 | POST | `/api/sources` | `{ urls: [...] }` or `{ url }` (max 50) | `{ added, skipped }` |
@@ -208,6 +221,7 @@ The tests use no network and no keys. `test/helpers.js` provides `fakeServer()` 
 | `anthropic.test.js` | Claude headers and body, forced tool output, image blocks, 529 retry, errors, routing, Claude-only reel |
 | `api.test.js` | the whole plan → render → approve → revise → post flow in mock mode, the scheduler |
 | `watch.test.js` | cuts, frames, audio and captions on a real clip; stand-in yt-dlp; vision and transcription requests; remakes; patterns |
+| `runs.test.js` | the Start flow: link and upload through every step, auto-approve, reuse of watched links, failure and retry, per-run AI choice |
 | `selftest.test.js` | system check results and next steps, read-only calls, the API route |
 | `settings.test.js` | key storage and masking, live switching, key tests, remote-edit protection, password, usage, caps |
 | `instagram.test.js`, `brief.test.js` | Graph API sequence; website text extraction |
@@ -220,7 +234,7 @@ Add a test with each change. A stand-in server beats mocking `fetch`, because it
 
 ## In-app test guide
 
-`GUIDE` in `public/studio.js` lists the 10 test steps. The code for each feature calls `markDone(id)` once that action succeeds (for example after an approve returns). Progress is saved in `localStorage` when it is available. To add a step, add it to `GUIDE` and call `markDone` where the action succeeds.
+`GUIDE` in `public/studio.js` lists the 12 test steps (starting with a run from the Start tab). The code for each feature calls `markDone(id)` once that action succeeds (for example after an approve returns). Progress is saved in `localStorage` when it is available. To add a step, add it to `GUIDE` and call `markDone` where the action succeeds.
 
 ## Conventions
 

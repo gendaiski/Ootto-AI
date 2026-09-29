@@ -16,7 +16,8 @@
 			<span>ootto <em>studio</em></span>
 		</a>
 		<nav class="tabs" aria-label="Sections">
-			<button class="tab" type="button" data-tab="plan" aria-current="page">Plan &amp; review</button>
+			<button class="tab" type="button" data-tab="start" aria-current="page">Start</button>
+			<button class="tab" type="button" data-tab="plan">Plan &amp; review</button>
 			<button class="tab" type="button" data-tab="watch">Watch &amp; remake</button>
 			<button class="tab" type="button" data-tab="settings">Settings</button>
 		</nav>
@@ -30,6 +31,90 @@
 </header>
 
 <main class="wrap">
+	<!-- Start: one place to begin. A reel link or an uploaded video goes through the whole process. -->
+	<section id="start" hidden>
+		<div class="ws-head">
+			<div>
+				<p class="eyebrow">Start here</p>
+				<h1>Make a reel from any reel</h1>
+				<p class="lede">Paste an Instagram reel link, or upload the video. Ootto downloads it, watches it frame by frame, listens to it, works out why it works, writes your version and renders it, ready for you to review.</p>
+			</div>
+		</div>
+
+		<form class="card start-form" id="start-form" novalidate>
+			<div class="start-step">
+				<span class="num" aria-hidden="true">1</span>
+				<div class="start-body">
+					<h2>The reel</h2>
+					<label class="field" for="s-url">Reel link <span class="opt">on Instagram: ⋯ or Share → Copy link</span></label>
+					<input id="s-url" type="url" inputmode="url" placeholder="https://www.instagram.com/reel/…" autocomplete="off" />
+					<div class="or"><span>or</span></div>
+					<label class="drop" id="s-drop">
+						<input type="file" id="s-file" accept="video/*" class="sr" />
+						<b id="s-file-name">Upload the video</b>
+						<span class="hint">MP4 or MOV from your phone or computer. Drop it here or click to choose.</span>
+					</label>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">2</span>
+				<div class="start-body">
+					<h2>Your business</h2>
+					<div id="s-brand-pick" class="row-2">
+						<label class="field">Make it for<select id="s-brand"></select></label>
+						<button class="btn btn-ghost btn-sm" type="button" id="s-brand-new">Add a business</button>
+					</div>
+					<div id="s-brand-form" class="grid2" hidden>
+						<label class="field">Business name<input id="s-b-name" placeholder="Northside Bakery" /></label>
+						<label class="field">Main call to action<input id="s-b-offer" placeholder="Order ahead on our website" /></label>
+						<label class="field span2">What the business does<textarea id="s-b-desc" rows="2" placeholder="Neighbourhood sourdough bakery with fresh bread daily and cakes to order."></textarea></label>
+					</div>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">3</span>
+				<div class="start-body">
+					<h2>How to remake it</h2>
+					<fieldset class="modes">
+						<legend class="sr">Remake mode</legend>
+						<label class="mode"><input type="radio" name="s-mode" value="format" checked /><span><b>Same format, new content</b><small>Same beats, timing, hook style and shots, with a new script and visuals about your business.</small></span></label>
+						<label class="mode"><input type="radio" name="s-mode" value="exact" /><span><b>Exact remake</b><small>The original words and timing with new visuals and voice. Only for your own reels or reels you have the rights to.</small></span></label>
+					</fieldset>
+					<label class="check" id="s-rights-row" hidden><input type="checkbox" id="s-rights" /> <span>This is my own reel, or I have the rights to reuse its words.</span></label>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">4</span>
+				<div class="start-body">
+					<h2>Which AI</h2>
+					<fieldset class="modes ai-pick" id="s-ai"></fieldset>
+					<p class="hint" id="s-ai-hint"></p>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">5</span>
+				<div class="start-body">
+					<h2>When it is ready</h2>
+					<label class="check plain-check"><input type="checkbox" id="s-auto" /> <span>Approve it and post it to Instagram automatically at the time below</span></label>
+					<label class="field">Post on<input type="datetime-local" id="s-when" /></label>
+					<p class="hint" id="s-auto-hint"></p>
+				</div>
+			</div>
+
+			<div class="form-actions start-go">
+				<button class="btn btn-accent btn-lg" type="submit" id="s-go">Start</button>
+				<span class="form-msg" id="s-msg" role="status"></span>
+			</div>
+		</form>
+
+		<div class="lib-head"><h2>Your runs</h2><p class="hint">Each run shows every step as it happens.</p></div>
+		<ul class="runs" id="runs" aria-label="Runs" aria-live="polite"></ul>
+	</section>
+
 	<!-- Onboarding / new brand -->
 	<section class="card onboard" id="onboard" hidden>
 		<div class="onboard-head">

@@ -2,13 +2,25 @@
 
 Plan, generate, review and post a week of Instagram Reels for a business, using OpenAI, Claude, or both. Learn from reels that already work: watch them, break them down, and remake their format for your business.
 
+## Start here
+
+Open the **Start** tab (the first screen):
+
+1. **The reel.** Paste an Instagram reel link (in Instagram: ⋯ or Share → Copy link), or upload the video file.
+2. **Your business.** Pick it, or add one in two fields.
+3. **How to remake it.** *Same format, new content* (default), or *Exact remake* for your own reels.
+4. **Which AI.** OpenAI or Claude for watching and writing. Images and voice come from OpenAI when its key is set.
+5. **When it is ready.** Leave it for your review, or tick auto-approve to schedule it for posting.
+
+Press **Start**. The run then goes through every step on its own, and **Your runs** shows each one as it happens: download (or upload) → find cuts and key frames → listen to the speech → analyse hook, beats and pacing → write your version → make images, voice and video → ready for review. A failed step says why, and **Try again** resumes from that step. Pasting a link that was already watched skips straight to writing.
+
 1. **Brief.** Enter the business once: website (read once for facts), what it does, audience, main call to action, tone and language.
 2. **Plan.** OpenAI or Claude writes up to 7 reels for the week. Each has a hook, 3 to 6 scenes (on-screen text, voiceover line and image prompt), a caption, hashtags and a posting time.
 3. **Generate.** For every scene, OpenAI makes a vertical image and speaks the voiceover line.
 4. **Render.** ffmpeg turns each reel into a 1080×1920, 30 fps H.264/AAC MP4. Every scene gets a slow zoom or pan, sized to its voice line. A boxed headline sits at the top and word-by-word captions sit at the bottom, both kept clear of Instagram's own buttons.
 5. **Review.** Watch each reel in a phone frame. Approve with ✓ or the → key. Request changes with ✕ or the ← key and a short note. The AI rewrites that reel, and only the scenes that changed are regenerated.
 6. **Post.** Approved reels post themselves at their scheduled time through the Instagram Graph API. Without Instagram connected, download the MP4, copy the caption and post by hand.
-7. **Watch & remake.** Paste reel links or upload videos. Studio watches each one frame by frame, listens to it and breaks down the hook, format, beats, pacing and layout. Then remake it for your business, or compare several to find the patterns they share and plan new reels from those patterns. See [Watch & remake](#watch--remake).
+7. **Watch & remake.** (The **Start** tab runs all of this in one go; this tab is for looking deeper and comparing reels.) Paste reel links or upload videos. Studio watches each one frame by frame, listens to it and breaks down the hook, format, beats, pacing and layout. Then remake it for your business, or compare several to find the patterns they share and plan new reels from those patterns. See [Watch & remake](#watch--remake).
 
 ## Run it
 
@@ -165,6 +177,7 @@ The tests never call the real OpenAI or Instagram. They run the real code agains
 - **Reliability:** caching, retries and error messages.
 - **Posting:** Instagram's upload, wait and publish sequence.
 - **Whole flow:** the full API in mock mode.
+- **Runs (Start):** a pasted link and an uploaded video each go through the whole chain to a reel ready for review; auto-approve schedules it; an already-watched link is not downloaded again; a failed download explains itself and can be retried; the AI chosen for a run (Claude) does the analysis and the script while OpenAI makes the images and voice.
 - **System check:** every check's ok/warn/fail/skip result against stand-in OpenAI, Claude and Instagram servers, read-only calls only, and the API route.
 - **Claude:** request headers and body, forced tool output, image blocks, retries on 529, clear errors (bad key, max_tokens, refusal), OpenAI/Claude routing, and a full Claude-only reel.
 - **Settings:** keys saved only on disk and masked in every response, live provider switching, key tests, remote edits refused without a password, the password gate, usage counts and monthly caps.

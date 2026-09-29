@@ -19,14 +19,14 @@ Needs Node.js 20+ (Node 22 was used). ffmpeg comes from `ffmpeg-static` and is d
 ```
 cd studio
 npm ci
-npm test               # 26 tests, about 2 minutes; no network or API keys needed
+npm test               # 30 tests, about 2–3 minutes; no network or API keys needed
 npm run check          # system check: ffmpeg render, data folder, yt-dlp, keys, Instagram
 npm start              # http://localhost:3000 (mock mode until a key is added)
 ```
 
 **Is it working?** Two built-in answers:
 - **System check:** Settings → Run system check, or `npm run check` in the terminal. It renders a test clip and checks the data folder, yt-dlp, each API key (by listing models, so no credits are spent), the Instagram account and the public address. Each line is ✓ ok, ! warning, ✗ broken or – not set up, with what to do next. The terminal command exits with code 1 if anything is broken.
-- **How to test** (button at the bottom right of the app): a 10-step checklist covering every feature. Each step ticks itself when it works: play, approve, request a change, plan, watch, jump to a beat, remake, find patterns, plan from patterns, system check. "Show me" jumps to the right place.
+- **How to test** (button at the bottom right of the app): a 12-step checklist covering every feature. It starts with a run from the Start tab and follows it to the end; each step ticks itself when it works. "Show me" jumps to the right place.
 
 Optional:
 ```
@@ -35,6 +35,7 @@ npm run demo:build     # about 5 minutes; writes demo-dist/ (static page + media
 ```
 
 ### Manual checklist (with real keys)
+0. **The main flow:** Start tab → paste an Instagram reel link (or upload a video) → pick the business, the mode and OpenAI or Claude → **Start**. Every step shows under Your runs until **Ready for review**. Try it once with OpenAI and once with Claude.
 1. **Mock mode** (no keys): Plan & review → enter a business → **Plan my week** → reels render → approve with → and request changes with ←.
 2. **Watch & remake:** upload any short MP4 → it is watched (cuts, frames, pacing) → **Remake for my business** → the new reel appears in Plan & review with the same rhythm.
 3. **Settings:** paste a real OpenAI key and/or Claude key → **Test** → **Save**. The header shows which AI is connected. Plan a week again to see real scripts, images and voice.
