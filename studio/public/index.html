@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Ootto Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="studio.css" />
+</head>
+<body>
+<header class="top">
+	<div class="wrap top-inner">
+		<a class="logo" href="/" aria-label="Ootto Studio home">
+			<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><circle cx="16" cy="16" r="7.5" fill="none" stroke="var(--accent-ink)" stroke-width="3.2"/><circle cx="24.5" cy="8" r="2.4" fill="var(--accent-ink)"/></svg>
+			<span>ootto <em>studio</em></span>
+		</a>
+		<nav class="tabs" aria-label="Sections">
+			<button class="tab" type="button" data-tab="start" aria-current="page">Start</button>
+			<button class="tab" type="button" data-tab="plan">Plan &amp; review</button>
+			<button class="tab" type="button" data-tab="watch">Watch &amp; remake</button>
+			<button class="tab" type="button" data-tab="settings">Settings</button>
+		</nav>
+		<div class="status" id="status" aria-live="polite"></div>
+		<div class="brand-pick" id="brand-pick" hidden>
+			<label class="sr" for="brand-select">Brand</label>
+			<select id="brand-select"></select>
+			<button class="btn btn-ghost btn-sm" id="new-brand" type="button">New brand</button>
+		</div>
+	</div>
+</header>
+
+<main class="wrap">
+	<!-- Start: one place to begin. A reel link or an uploaded video goes through the whole process. -->
+	<section id="start" hidden>
+		<div class="ws-head">
+			<div>
+				<p class="eyebrow">Start here</p>
+				<h1>Make a reel from any reel</h1>
+				<p class="lede">Paste an Instagram reel link, or upload the video. Ootto downloads it, watches it frame by frame, listens to it, works out why it works, writes your version and renders it, ready for you to review.</p>
+			</div>
+		</div>
+
+		<form class="card start-form" id="start-form" novalidate>
+			<div class="start-step">
+				<span class="num" aria-hidden="true">1</span>
+				<div class="start-body">
+					<h2>The reel</h2>
+					<label class="field" for="s-url">Reel link <span class="opt">on Instagram: ⋯ or Share → Copy link</span></label>
+					<input id="s-url" type="url" inputmode="url" placeholder="https://www.instagram.com/reel/…" autocomplete="off" />
+					<div class="or"><span>or</span></div>
+					<label class="drop" id="s-drop">
+						<input type="file" id="s-file" accept="video/*" class="sr" />
+						<b id="s-file-name">Upload the video</b>
+						<span class="hint">MP4 or MOV from your phone or computer. Drop it here or click to choose.</span>
+					</label>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">2</span>
+				<div class="start-body">
+					<h2>Your business</h2>
+					<div id="s-brand-pick" class="row-2">
+						<label class="field">Make it for<select id="s-brand"></select></label>
+						<button class="btn btn-ghost btn-sm" type="button" id="s-brand-new">Add a business</button>
+					</div>
+					<div id="s-brand-form" class="grid2" hidden>
+						<label class="field">Business name<input id="s-b-name" placeholder="Northside Bakery" /></label>
+						<label class="field">Main call to action<input id="s-b-offer" placeholder="Order ahead on our website" /></label>
+						<label class="field span2">What the business does<textarea id="s-b-desc" rows="2" placeholder="Neighbourhood sourdough bakery with fresh bread daily and cakes to order."></textarea></label>
+					</div>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">3</span>
+				<div class="start-body">
+					<h2>How to remake it</h2>
+					<fieldset class="modes">
+						<legend class="sr">Remake mode</legend>
+						<label class="mode"><input type="radio" name="s-mode" value="format" checked /><span><b>Same format, new content</b><small>Same beats, timing, hook style and shots, with a new script and visuals about your business.</small></span></label>
+						<label class="mode"><input type="radio" name="s-mode" value="exact" /><span><b>Exact remake</b><small>The original words and timing with new visuals and voice. Only for your own reels or reels you have the rights to.</small></span></label>
+					</fieldset>
+					<label class="check" id="s-rights-row" hidden><input type="checkbox" id="s-rights" /> <span>This is my own reel, or I have the rights to reuse its words.</span></label>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">4</span>
+				<div class="start-body">
+					<h2>Which AI</h2>
+					<fieldset class="modes ai-pick" id="s-ai"></fieldset>
+					<p class="hint" id="s-ai-hint"></p>
+				</div>
+			</div>
+
+			<div class="start-step">
+				<span class="num" aria-hidden="true">5</span>
+				<div class="start-body">
+					<h2>When it is ready</h2>
+					<label class="check plain-check"><input type="checkbox" id="s-auto" /> <span>Approve it and post it to Instagram automatically at the time below</span></label>
+					<label class="field">Post on<input type="datetime-local" id="s-when" /></label>
+					<p class="hint" id="s-auto-hint"></p>
+				</div>
+			</div>
+
+			<div class="form-actions start-go">
+				<button class="btn btn-accent btn-lg" type="submit" id="s-go">Start</button>
+				<span class="form-msg" id="s-msg" role="status"></span>
+			</div>
+		</form>
+
+		<div class="lib-head"><h2>Your runs</h2><p class="hint">Each run shows every step as it happens.</p></div>
+		<ul class="runs" id="runs" aria-label="Runs" aria-live="polite"></ul>
+	</section>
+
+	<!-- Onboarding / new brand -->
+	<section class="card onboard" id="onboard" hidden>
+		<div class="onboard-head">
+			<p class="eyebrow">Step 1 · Your business</p>
+			<h1>Plan a week of reels in one go.</h1>
+			<p class="lede">Tell Ootto about the business. It writes the scripts, makes the visuals and voiceover, and renders each reel for you to approve.</p>
+		</div>
+		<form id="brand-form" class="form" novalidate>
+			<div class="grid2">
+				<label>Website <span class="opt">optional</span><input id="f-website" name="website" type="url" inputmode="url" placeholder="https://yourbusiness.com" autocomplete="url" /></label>
+				<label>Business name<input id="f-name" name="name" placeholder="Northside Bakery" /></label>
+			</div>
+			<label>What the business does<textarea id="f-description" name="description" rows="3" placeholder="Neighbourhood sourdough bakery. Fresh bread daily, pastries at weekends, custom celebration cakes to order."></textarea></label>
+			<div class="grid2">
+				<label>Who you sell to<input id="f-audience" name="audience" placeholder="Locals aged 25–45 who care about real ingredients" /></label>
+				<label>Main call to action<input id="f-offer" name="offer" placeholder="Order ahead on our website" /></label>
+			</div>
+			<div class="grid4">
+				<label>Tone<select id="f-tone" name="tone"><option>friendly and expert</option><option>playful and bold</option><option>calm and premium</option><option>straight-talking</option></select></label>
+				<label>Language<input id="f-language" name="language" value="English" /></label>
+				<label>Reels<select id="f-count" name="count"><option>3</option><option>5</option><option selected>7</option></select></label>
+				<label>First post on<input id="f-start" name="startDate" type="date" /></label>
+			</div>
+			<p class="hint">Give a website, a description, or both. The website is read once for facts; nothing is posted without your approval.</p>
+			<div class="form-actions"><button class="btn btn-accent btn-lg" type="submit" id="plan-btn">Plan my week</button><span class="form-msg" id="form-msg" role="status"></span></div>
+		</form>
+	</section>
+
+	<!-- Workspace -->
+	<section id="workspace" hidden>
+		<div class="ws-head">
+			<div>
+				<p class="eyebrow" id="ws-eyebrow">This week</p>
+				<h1 id="ws-title">Your reels</h1>
+			</div>
+			<form class="more" id="more-form">
+				<label class="sr" for="more-count">How many reels</label>
+				<select id="more-count"><option>3</option><option>5</option><option selected>7</option></select>
+				<label class="sr" for="more-start">Starting</label>
+				<input id="more-start" type="date" />
+				<button class="btn btn-ghost" type="submit" id="more-btn">Plan more reels</button>
+			</form>
+		</div>
+
+		<ol class="week" id="week" aria-label="Reels this week"></ol>
+
+		<div class="review" id="review">
+			<div class="stage">
+				<div class="phone">
+					<div class="phone-screen" id="screen"></div>
+				</div>
+				<div class="decide">
+					<button class="round round-no" id="btn-change" type="button" aria-label="Request changes" title="Request changes (←)">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+					</button>
+					<button class="round round-yes" id="btn-approve" type="button" aria-label="Approve" title="Approve (→)">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+					</button>
+				</div>
+				<p class="keys"><kbd>←</kbd> request changes · <kbd>→</kbd> approve</p>
+			</div>
+
+			<article class="detail card" id="detail" aria-live="polite"></article>
+		</div>
+	</section>
+
+	<!-- Watch & remake -->
+	<section id="watch" hidden>
+		<div class="ws-head">
+			<div>
+				<p class="eyebrow" id="w-eyebrow">Learn from reels that work</p>
+				<h1>Watch &amp; remake</h1>
+				<p class="lede">Paste reel links or upload a video. Ootto watches each one frame by frame, listens to it, and breaks down the hook, structure, pacing and layout. Then remake the format for your business, or compare several reels to find what they share.</p>
+			</div>
+		</div>
+
+		<form class="card watch-add" id="watch-form" novalidate>
+			<label for="w-urls">Reel links <span class="opt">one per line: Instagram, TikTok, YouTube Shorts…</span></label>
+			<textarea id="w-urls" rows="3" placeholder="https://www.instagram.com/reel/…"></textarea>
+			<div class="form-actions">
+				<button class="btn btn-accent" type="submit" id="w-go">Watch</button>
+				<label class="btn btn-ghost" id="w-upload-btn">Upload a video<input type="file" id="w-file" accept="video/*" class="sr" /></label>
+				<span class="form-msg" id="w-msg" role="status"></span>
+			</div>
+			<p class="hint" id="w-hint"></p>
+		</form>
+
+		<div class="lib-head">
+			<h2>Watched reels</h2>
+			<button class="btn btn-ghost btn-sm" type="button" id="w-compare" disabled>Find patterns</button>
+		</div>
+		<ul class="library" id="library" aria-label="Watched reels"></ul>
+
+		<div class="review" id="w-review">
+			<div class="stage"><div class="phone"><div class="phone-screen" id="w-screen"></div></div></div>
+			<article class="detail card" id="w-detail" aria-live="polite"></article>
+		</div>
+
+		<div class="lib-head" id="pat-head">
+			<h2>Patterns</h2>
+			<p class="hint">Tick “Compare” on two or more watched reels, then Find patterns.</p>
+		</div>
+		<ul class="profiles" id="profiles" aria-label="Patterns"></ul>
+	</section>
+
+	<!-- Settings: AI keys, who does what, usage -->
+	<section id="settings" hidden>
+		<div class="ws-head">
+			<div>
+				<p class="eyebrow">Settings</p>
+				<h1>Connect your AI</h1>
+				<p class="lede">Ootto runs on your own API keys, so you pay OpenAI or Anthropic directly for what you use. Keys stay on the computer running the studio and are only sent to the service they belong to.</p>
+			</div>
+		</div>
+		<div id="set-alerts"></div>
+		<div class="keys-grid" id="set-keys"></div>
+		<div class="card set-card" id="set-routing"></div>
+		<div class="card set-card" id="set-check"></div>
+		<div class="card set-card" id="set-usage"></div>
+	</section>
+</main>
+
+<dialog id="remake-dialog" class="dialog">
+	<form method="dialog" id="remake-form">
+		<h2>Remake this reel</h2>
+		<p class="hint" id="rm-from"></p>
+		<label class="field">For<select id="rm-brand"></select></label>
+		<fieldset class="modes">
+			<legend class="sr">How to remake it</legend>
+			<label class="mode"><input type="radio" name="rm-mode" value="format" checked /><span><b>Same format, new content</b><small>Same beats, timing, hook style, shots and text placement. A new script and new visuals about your business.</small></span></label>
+			<label class="mode"><input type="radio" name="rm-mode" value="exact" /><span><b>Exact remake</b><small>Keeps the original words and timing, with new visuals and a new voice. Only for your own reels or reels you have the rights to.</small></span></label>
+		</fieldset>
+		<label class="check" id="rm-rights-row" hidden><input type="checkbox" id="rm-rights" /> <span>This is my own reel, or I have the rights to reuse its words.</span></label>
+		<label class="field">Post on<input type="datetime-local" id="rm-when" /></label>
+		<div class="form-actions">
+			<button class="btn btn-ghost" value="cancel" formnovalidate type="submit">Cancel</button>
+			<button class="btn btn-accent" value="send" type="submit" id="rm-send">Create remake</button>
+		</div>
+	</form>
+</dialog>
+
+<dialog id="fb-dialog" class="dialog">
+	<form method="dialog" id="fb-form">
+		<h2>What should change?</h2>
+		<p class="hint">Ootto rewrites the script from your note and re-renders only the scenes that changed.</p>
+		<div class="chips" id="fb-chips">
+			<button type="button" class="chip">Make the hook stronger</button>
+			<button type="button" class="chip">Shorter, under 15 seconds</button>
+			<button type="button" class="chip">Different visuals</button>
+			<button type="button" class="chip">More playful</button>
+			<button type="button" class="chip">Less salesy</button>
+		</div>
+		<label class="sr" for="fb-text">Your note</label>
+		<textarea id="fb-text" rows="4" placeholder="e.g. Open on the finished cake, and mention we deliver on weekends."></textarea>
+		<div class="form-actions">
+			<button class="btn btn-ghost" value="cancel" formnovalidate type="submit">Cancel</button>
+			<button class="btn btn-accent" value="send" type="submit" id="fb-send">Rewrite reel</button>
+		</div>
+	</form>
+</dialog>
+
+<dialog id="confirm-dialog" class="dialog">
+	<form method="dialog">
+		<h2 id="confirm-title">Are you sure?</h2>
+		<p class="hint" id="confirm-text"></p>
+		<div class="form-actions">
+			<button class="btn btn-ghost" value="cancel" type="submit">Cancel</button>
+			<button class="btn btn-accent" value="ok" type="submit" id="confirm-ok">OK</button>
+		</div>
+	</form>
+</dialog>
+
+<button class="guide-btn" id="guide-btn" type="button" aria-controls="guide" aria-expanded="false">How to test <span id="guide-count"></span></button>
+<aside class="guide card" id="guide" hidden aria-label="How to test">
+	<div class="guide-head">
+		<div><h2>How to test</h2><p class="hint" id="guide-sub">Try each step. It ticks itself when it works.</p></div>
+		<button class="btn btn-ghost btn-sm" type="button" id="guide-close" aria-label="Close">Close</button>
+	</div>
+	<div class="guide-bar"><span id="guide-fill"></span></div>
+	<ol class="guide-steps" id="guide-steps"></ol>
+	<div class="form-actions"><button class="btn btn-ghost btn-sm" type="button" id="guide-reset">Start again</button></div>
+</aside>
+
+<div class="toast" id="toast" role="alert" hidden></div>
+<script src="studio.js" type="module"></script>
+</body>
+</html>

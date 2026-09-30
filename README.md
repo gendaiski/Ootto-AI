@@ -9,6 +9,17 @@ that could not be confirmed is marked on the page as assumed or illustrative.
 
 Landing page for an AI operator that runs an Instagram account.
 
+## Ootto Studio (working app)
+
+`studio/` is a working reel generator that runs on your own OpenAI key, Claude key, or both:
+
+- **Start (one place to begin):** paste an Instagram reel link or upload the video, pick your business and OpenAI or Claude, press Start. The run downloads, watches, listens, analyses, writes your version and renders it, showing every step until it is ready for review.
+- **Plan & review:** AI writes a week of reel scripts; OpenAI makes the scene images and voiceover (or text cards with captions when only Claude is connected); ffmpeg renders 1080×1920 MP4s; you approve or request changes; approved reels post to Instagram on schedule.
+- **Watch & remake:** paste reel links or upload videos; Studio measures the cuts, takes key frames, transcribes the speech and breaks each reel down (hook, beats, pacing, layout). Remake the format for your business, or find the patterns several reels share and plan new reels from them.
+- **Settings:** connect and test OpenAI and Claude keys, choose which AI does which job, see monthly usage and set caps.
+
+Run it: `studio/README.md`. Code and API: `studio/docs/DEVELOPER.md`. Handoff and verification checklist: `HANDOFF.md`.
+
 ## Open it
 
 Open `prototype/index.html` in any browser. It is a single self-contained file; the only external
