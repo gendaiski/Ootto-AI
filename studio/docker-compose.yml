@@ -1,0 +1,18 @@
+# docker compose up -d
+# Put your settings in .env next to this file (copy .env.example). At least set STUDIO_PASSWORD.
+# API keys can go in .env or be pasted later in the studio's Settings tab.
+services:
+  studio:
+    build: .
+    image: ootto-studio
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      DATA_DIR: /data
+    ports:
+      - "127.0.0.1:3000:3000"   # only this server; put HTTPS in front (docs/DEPLOY.md)
+    volumes:
+      - studio-data:/data
+volumes:
+  studio-data:
