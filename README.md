@@ -1,5 +1,7 @@
 # ootto.ai – concept draft
 
+> **Handing this over?** Start with [CODEX-HANDOFF.md](CODEX-HANDOFF.md) (all projects) and [HANDOFF.md](HANDOFF.md) (Studio run and verify).
+
 Target: https://ootto.ai/
 
 **This is a concept draft, not a clone.** `ootto.ai` is blocked by the network policy of the
